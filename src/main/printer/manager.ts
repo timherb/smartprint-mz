@@ -112,13 +112,12 @@ let printerPool: string[] = [] // names of printers in the active pool
 function deriveStatus(electronStatus: number, options: Record<string, string>): PrinterStatus {
   // Electron's PrinterInfo.status is the OS-level printer status integer
   // On macOS/CUPS: 3=idle, 4=processing, 5=stopped
-  // On Windows: bitmask from PRINTER_STATUS_* flags
-  if (electronStatus === 3) return 'ready'
-  if (electronStatus === 4) return 'busy'
-  if (electronStatus === 5) return 'offline'
+  // On Windows: bitmask from PRINTER_STATUS_* flags (0 = idle/ready)
 
-  // Windows bitmask checks (common PRINTER_STATUS flags)
-  if (electronStatus > 0) {
+  if (process.platform === 'win32') {
+    // Windows: status is a bitmask. 0 means no flags set = idle/ready.
+    if (electronStatus === 0) return 'ready'
+
     const PAUSED = 0x1
     const ERROR = 0x2
     const OFFLINE = 0x80
@@ -129,9 +128,16 @@ function deriveStatus(electronStatus: number, options: Record<string, string>): 
 
     if (electronStatus & OFFLINE) return 'offline'
     if (electronStatus & (ERROR | PAPER_JAM | PAPER_OUT)) return 'error'
-    if (electronStatus & PAUSED) return 'offline'
+    if (electronStatus & PAUSED) return 'paused'
     if (electronStatus & (PRINTING | PROCESSING)) return 'busy'
+
+    return 'ready'
   }
+
+  // macOS/Linux CUPS: 3=idle, 4=processing, 5=stopped
+  if (electronStatus === 3) return 'ready'
+  if (electronStatus === 4) return 'busy'
+  if (electronStatus === 5) return 'offline'
 
   // Fallback: check CUPS options (macOS returns ep.status=0 for all printers)
   const reasons = (options['printer-state-reasons'] ?? '').toLowerCase()

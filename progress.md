@@ -1,6 +1,74 @@
 # Smart Print - Development Log
 
 ================================================================================
+## 2026-02-09 Session 2 (Bug Fixes, Persistence, CI/CD)
+================================================================================
+
+### Tasks Completed
+
+- [x] Fixed printer status detection — CUPS `printer-state-reasons` checked before `printer-state`; `offline-report` now correctly maps to offline
+- [x] Added `paused` printer status for held queues (Angie's Printer case)
+- [x] Added CUPS media size query via `lpoptions -p <name> -l` with Windows PowerShell fallback
+- [x] Added printer deduplication by device-uri serial/UUID (merges USB/AirPrint/network queues for same physical device)
+- [x] Fixed file watcher: `ignoreInitial: false` to pick up existing files; fixed filename size check that was rejecting normal camera filenames
+- [x] Added native directory picker via `dialog.showOpenDialog` IPC
+- [x] Added settings persistence via zustand `persist` middleware (localStorage)
+- [x] Added theme persistence across restarts
+- [x] Added printer pool persistence in settings store
+- [x] Auto-restore settings on launch: syncs pool to main process, auto-starts watcher, starts health monitor
+- [x] Hid Session Uptime and Success Rate from Monitor (client-facing simplification)
+- [x] Filtered Monitor printers to pool-only
+- [x] Removed ink/paper level gauges (not available from Electron printer API)
+- [x] Removed Export Original button from Gallery
+- [x] Defaulted to light mode
+- [x] Initialized git repo, committed 72 files (28,744 lines), pushed to Azure DevOps
+- [x] Configured Azure Pipelines: Node.js on windows-latest, builds portable .exe, publishes as artifact
+
+### Key Decisions
+
+- CUPS `printer-state-reasons` must be checked BEFORE `printer-state` — macOS reports state=3 (idle) even for offline printers; the real status is in reasons (`offline-report`)
+- Electron's `ep.status` returns 0 for all printers on macOS — must fall back to CUPS options
+- Removed ink/paper gauges rather than showing fake data — Electron printer API doesn't expose these; would need vendor-specific SDKs per printer brand
+- Paper sizes queried from print driver via `lpoptions` since Electron only exposes current media, not all supported
+- Dedup uses device-uri serial/UUID, not display name — same model with different serials (physically separate printers) stays separate
+- Settings persist to renderer localStorage via zustand — simpler than round-tripping through electron-store IPC
+- "Set up once, open and go" architecture: persisted settings + auto-start on launch
+
+### Summary
+
+Major bug-fix and polish session. Fixed printer status detection for macOS CUPS, added real paper size queries from print drivers, implemented full settings persistence so clients configure once and the app auto-starts at every event. Set up git repo and Azure DevOps CI/CD pipeline producing downloadable Windows portable .exe artifacts.
+
+### Files Modified
+
+- src/main/printer/manager.ts — CUPS status fix, media query, dedup, paused status
+- src/main/watcher/local.ts — ignoreInitial fix, filename size check fix
+- src/main/index.ts — dialog IPC handler, getMediaSizes IPC
+- src/main/printer/index.ts — export getMediaSizes
+- src/preload/index.ts — openDirectory + mediaSizes API
+- src/preload/index.d.ts — type declarations for new APIs
+- src/renderer/src/stores/settings.ts — zustand persist, printerPool field
+- src/renderer/src/stores/theme.ts — zustand persist, pre-hydration apply
+- src/renderer/src/screens/SettingsB3.tsx — watcher start on save, pool from settings store, driver paper sizes, browse button wired
+- src/renderer/src/screens/MonitorB3.tsx — removed stats/gauges, pool from settings store
+- src/renderer/src/screens/GalleryB3.tsx — removed export button
+- src/renderer/src/layouts/AppLayoutB3.tsx — auto-restore settings on mount
+- azure-pipelines.yml — CI/CD pipeline (created via Azure DevOps UI)
+
+### Outstanding Items
+
+- [ ] End-to-end test on Windows with real printers
+- [ ] Test file watcher with real photo drops
+- [ ] Error boundaries and user-facing error messages
+- [ ] Keyboard shortcuts
+- [ ] App icon and branding
+
+### Next Session
+
+- Test on Windows: configure printers, drop photos, verify print jobs
+- Address any Windows-specific issues (printer status mapping, file paths)
+- Polish error handling and loading states
+
+================================================================================
 ## 2026-02-09 Session (Full Build: Scaffolding → Backend → Design → Wiring)
 ================================================================================
 

@@ -48,17 +48,20 @@ Smart Print is a desktop photo printing management application for live events. 
 
 ### Current Priorities
 
-1. Initialize git repo and commit all work
-2. End-to-end testing with real printers and file drops
-3. Settings persistence via electron-store in renderer
-4. Native file dialog for directory picker
-5. Error boundaries and loading states
+1. End-to-end testing on Windows with real printers
+2. Error boundaries and user-facing error messages
+3. Keyboard shortcuts
+4. App icon and branding
+5. Auto-update mechanism
 
 ### Known Issues
 
 | Issue | Severity | Workaround |
 |---|---|---|
-| None yet | - | - |
+| Electron `ep.status` returns 0 for all printers on macOS | Med | Uses CUPS `printer-state-reasons` from options dict instead |
+| CUPS `printer-state=3` (idle) reported even for offline printers | Med | Check `printer-state-reasons` for `offline-report` before trusting state |
+| Ink/paper levels not available from Electron printer API | Low | Removed gauges; would need vendor SDKs per printer brand |
+| Electron TypeScript defs missing `.status` and `.isDefault` on PrinterInfo | Low | Access via `(ep as any).status` |
 
 ---
 

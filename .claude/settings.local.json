@@ -10,7 +10,11 @@
       "Bash(gtimeout 15 npx electron-vite:*)",
       "Bash(git init:*)",
       "Bash(git status:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: initial Smart Print application\n\nComplete Electron + React + TypeScript photo printing management system.\n\nBackend \\(F001-F004\\):\n- Project scaffolding with electron-vite, Tailwind CSS v4, shadcn/ui\n- Printer integration: discovery, queue, health monitoring, load balancing\n- Local file watcher: chokidar, size verification, auto-processing\n- Cloud API client: registration, polling, download, retry logic\n- CUPS media size query for real paper size detection\n- Printer deduplication by device URI serial/UUID\n\nFrontend \\(F005-F007\\):\n- B3 \"Soft Studio\" design: Plus Jakarta Sans, copper accent, frosted glass\n- Full light/dark mode via CSS variables + zustand persist\n- Settings: mode selection, directory picker, printer pool, paper size\n- Monitor: hero stats, print queue, printer status, activity feed\n- Gallery: photo grid, detail panel, batch operations, search/filter\n- Zustand stores bridging IPC to React with localStorage persistence\n- Auto-restore settings and start watcher on launch\n\nDesign exploration \\(kept as reference\\):\n- 5 design concepts: A, B, B2, B3, C\n\nCo-Authored-By: Claude Opus 4.6 \\(1M context\\) <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

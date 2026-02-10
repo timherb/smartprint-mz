@@ -1,0 +1,61 @@
+{
+  "project": "[PROJECT_NAME]",
+  "version": "1.0",
+  "last_updated": "YYYY-MM-DD",
+  "features": [
+    {
+      "id": "F001",
+      "name": "[Feature Name]",
+      "description": "[Detailed description of what this feature does]",
+      "priority": "high",
+      "status": "pending",
+      "depends_on": [],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. [First step to test this feature]",
+        "2. [Second step]",
+        "3. [Third step]",
+        "4. [Expected outcome to verify]"
+      ],
+      "test_results": "",
+      "implementation_date": "",
+      "files_modified": []
+    },
+    {
+      "id": "F002",
+      "name": "[Another Feature]",
+      "description": "[Description]",
+      "priority": "medium",
+      "status": "pending",
+      "depends_on": ["F001"],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. [Test step]",
+        "2. [Test step]"
+      ],
+      "test_results": "",
+      "implementation_date": "",
+      "files_modified": []
+    }
+  ],
+  "schema_version": "1.1",
+  "schema_notes": {
+    "status_values": ["pending", "in_progress", "implemented", "needs_verification", "blocked"],
+    "priority_values": ["critical", "high", "medium", "low"],
+    "rules": [
+      "DO NOT remove features from this list",
+      "DO NOT modify feature descriptions or testing_steps",
+      "ONLY update: status, tested, test_results, implementation_date, files_modified, blocked_reason",
+      "Always run testing_steps before marking as implemented",
+      "Document actual test results in test_results field",
+      "When status is 'blocked', blocked_reason is REQUIRED",
+      "Check depends_on before starting a feature - dependencies must be implemented first"
+    ],
+    "field_descriptions": {
+      "depends_on": "Array of feature IDs that must be completed before this feature can start",
+      "blocked_reason": "Required explanation when status is 'blocked' (e.g., 'Waiting on API deployment')"
+    }
+  }
+}

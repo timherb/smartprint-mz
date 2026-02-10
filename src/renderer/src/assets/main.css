@@ -1,0 +1,104 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@theme {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-fg);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--card-fg);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-fg);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-fg);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-fg);
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-amber-accent: var(--amber);
+  --color-amber-accent-foreground: var(--amber-fg);
+  --radius: 0.625rem;
+
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* ───── Dark theme (default) ───── */
+:root {
+  --bg: #0a0a0c;
+  --fg: #f0f0f2;
+  --card: #111114;
+  --card-fg: #f0f0f2;
+  --primary: #f0f0f2;
+  --primary-fg: #111114;
+  --secondary: #1c1c22;
+  --secondary-fg: #f0f0f2;
+  --muted: #1c1c22;
+  --muted-fg: #8b8b96;
+  --accent: #1c1c22;
+  --accent-fg: #f0f0f2;
+  --destructive: #c53030;
+  --destructive-fg: #fff;
+  --border-color: #232329;
+  --input-color: #232329;
+  --ring-color: #525264;
+  --amber: #e8930c;
+  --amber-fg: #0a0a0c;
+  --surface-elevated: #16161a;
+  --surface-sunken: #08080a;
+  --glow: rgba(232, 147, 12, 0.08);
+}
+
+/* ───── Light theme ───── */
+:root.light {
+  --bg: #f8f8fa;
+  --fg: #111114;
+  --card: #ffffff;
+  --card-fg: #111114;
+  --primary: #111114;
+  --primary-fg: #f8f8fa;
+  --secondary: #f0f0f3;
+  --secondary-fg: #111114;
+  --muted: #e8e8ed;
+  --muted-fg: #64647a;
+  --accent: #f0f0f3;
+  --accent-fg: #111114;
+  --destructive: #dc2626;
+  --destructive-fg: #fff;
+  --border-color: #dcdce4;
+  --input-color: #e8e8ed;
+  --ring-color: #a0a0b4;
+  --amber: #d97706;
+  --amber-fg: #fff;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #f0f0f3;
+  --glow: rgba(217, 119, 6, 0.06);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* Utility classes for the amber accent */
+@layer utilities {
+  .bg-amber-accent { background-color: var(--amber); }
+  .text-amber-accent { color: var(--amber); }
+  .border-amber-accent { border-color: var(--amber); }
+  .bg-surface-elevated { background-color: var(--surface-elevated); }
+  .bg-surface-sunken { background-color: var(--surface-sunken); }
+  .bg-glow { background-color: var(--glow); }
+}

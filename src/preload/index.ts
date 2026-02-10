@@ -1,0 +1,280 @@
+import { contextBridge, ipcRenderer } from 'electron'
+import { electronAPI } from '@electron-toolkit/preload'
+
+type EventCallback<T> = (payload: T) => void
+
+// Printer DTO types (mirror main process types for preload layer)
+interface PaperSizeDTO {
+  name: string
+  width: number
+  height: number
+}
+
+interface PrinterCapabilitiesDTO {
+  paperSizes: PaperSizeDTO[]
+  paperTypes: string[]
+  color: boolean
+  duplex: boolean
+}
+
+interface PrinterInfoDTO {
+  name: string
+  displayName: string
+  description: string
+  driver: string
+  status: string
+  isDefault: boolean
+  capabilities: PrinterCapabilitiesDTO
+  lastSeen: number
+}
+
+interface PrintJobOptionsDTO {
+  printerName?: string
+  copies?: number
+  color?: boolean
+  paperSize?: string
+  landscape?: boolean
+  silent?: boolean
+}
+
+interface PrintJobDTO {
+  id: string
+  filename: string
+  printerName: string
+  status: string
+  options: PrintJobOptionsDTO
+  createdAt: number
+  startedAt: number | null
+  completedAt: number | null
+  error: string | null
+  retries: number
+}
+
+interface SubmitJobResultDTO {
+  jobId: string
+  printerName: string
+  status: string
+}
+
+interface QueueSnapshotDTO {
+  pending: number
+  printing: number
+  completed: number
+  failed: number
+  total: number
+  jobs: PrintJobDTO[]
+}
+
+interface PrinterHealthStatusDTO {
+  name: string
+  displayName: string
+  status: string
+  lastSeen: number
+}
+
+interface QueueHealthDTO {
+  printersOnline: number
+  printersOffline: number
+  printers: PrinterHealthStatusDTO[]
+  lastCheck: number
+}
+
+interface PrinterEventDTO {
+  type: string
+  data: Record<string, unknown>
+  timestamp: number
+}
+
+const api = {
+  ping: (): Promise<string> => ipcRenderer.invoke('ping'),
+
+  // Dialog
+  openDirectory: (): Promise<{ canceled: boolean; path: string }> =>
+    ipcRenderer.invoke('dialog:open-directory'),
+
+  // Cloud API
+  cloud: {
+    register: (key: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('cloud:register', key),
+
+    start: (): Promise<{ success: boolean }> => ipcRenderer.invoke('cloud:start'),
+
+    stop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('cloud:stop'),
+
+    confirmPrint: (filename: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('cloud:confirm-print', filename),
+
+    health: (): Promise<{ status: 'ok' } | null> => ipcRenderer.invoke('cloud:health'),
+
+    status: (): Promise<{
+      registered: boolean
+      polling: boolean
+      connected: boolean
+      lastPollTime: number | null
+      lastHealthCheckTime: number | null
+    }> => ipcRenderer.invoke('cloud:status'),
+
+    onPhotoReady: (
+      callback: EventCallback<{ filePath: string; filename: string }>
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { filePath: string; filename: string }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('cloud:photo-ready', handler)
+      return () => ipcRenderer.removeListener('cloud:photo-ready', handler)
+    },
+
+    onError: (callback: EventCallback<{ error: string }>): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { error: string }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('cloud:error', handler)
+      return () => ipcRenderer.removeListener('cloud:error', handler)
+    },
+
+    onConnectionStatus: (callback: EventCallback<{ connected: boolean }>): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { connected: boolean }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('cloud:connection-status', handler)
+      return () => ipcRenderer.removeListener('cloud:connection-status', handler)
+    }
+  },
+
+  // Watcher API
+  watcher: {
+    start: (directory: string): Promise<{ success: boolean; directory: string }> =>
+      ipcRenderer.invoke('watcher:start', directory),
+
+    stop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('watcher:stop'),
+
+    moveToProcessed: (filepath: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('watcher:move-to-processed', filepath),
+
+    status: (): Promise<{ running: boolean; directory: string | null }> =>
+      ipcRenderer.invoke('watcher:status'),
+
+    onPhotoReady: (
+      callback: EventCallback<{ filepath: string; filename: string; sizeBytes: number }>
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { filepath: string; filename: string; sizeBytes: number }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('watcher:photo-ready', handler)
+      return () => ipcRenderer.removeListener('watcher:photo-ready', handler)
+    },
+
+    onPhotoPrinted: (
+      callback: EventCallback<{ filename: string; destination: string }>
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { filename: string; destination: string }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('watcher:photo-printed', handler)
+      return () => ipcRenderer.removeListener('watcher:photo-printed', handler)
+    },
+
+    onError: (
+      callback: EventCallback<{ error: string; filepath?: string }>
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { error: string; filepath?: string }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('watcher:error', handler)
+      return () => ipcRenderer.removeListener('watcher:error', handler)
+    }
+  },
+
+  // Printer API (F002)
+  printer: {
+    discover: (forceRefresh?: boolean): Promise<PrinterInfoDTO[]> =>
+      ipcRenderer.invoke('printer:discover', forceRefresh),
+
+    list: (): Promise<PrinterInfoDTO[]> => ipcRenderer.invoke('printer:list'),
+
+    get: (name: string): Promise<PrinterInfoDTO | null> =>
+      ipcRenderer.invoke('printer:get', name),
+
+    setPool: (names: string[]): Promise<{ pool: string[] }> =>
+      ipcRenderer.invoke('printer:set-pool', names),
+
+    getPool: (): Promise<string[]> => ipcRenderer.invoke('printer:get-pool'),
+
+    clearCache: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('printer:clear-cache'),
+
+    mediaSizes: (printerName: string): Promise<PaperSizeDTO[]> =>
+      ipcRenderer.invoke('printer:media-sizes', printerName),
+
+    submitJob: (
+      filename: string,
+      options?: PrintJobOptionsDTO
+    ): Promise<SubmitJobResultDTO> =>
+      ipcRenderer.invoke('printer:submit-job', filename, options),
+
+    getJob: (jobId: string): Promise<PrintJobDTO | null> =>
+      ipcRenderer.invoke('printer:get-job', jobId),
+
+    cancelJob: (jobId: string): Promise<PrintJobDTO | null> =>
+      ipcRenderer.invoke('printer:cancel-job', jobId),
+
+    queueSnapshot: (): Promise<QueueSnapshotDTO> =>
+      ipcRenderer.invoke('printer:queue-snapshot'),
+
+    clearFinished: (): Promise<{ cleared: number }> =>
+      ipcRenderer.invoke('printer:clear-finished'),
+
+    health: (): Promise<QueueHealthDTO> => ipcRenderer.invoke('printer:health'),
+
+    startMonitor: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('printer:start-monitor'),
+
+    stopMonitor: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('printer:stop-monitor'),
+
+    onEvent: (
+      callback: EventCallback<PrinterEventDTO>
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: PrinterEventDTO
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('printer:event', handler)
+      return () => ipcRenderer.removeListener('printer:event', handler)
+    }
+  }
+}
+
+if (process.contextIsolated) {
+  try {
+    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('api', api)
+  } catch (error) {
+    console.error(error)
+  }
+} else {
+  // @ts-ignore (define in dts)
+  window.electron = electronAPI
+  // @ts-ignore (define in dts)
+  window.api = api
+}

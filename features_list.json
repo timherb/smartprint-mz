@@ -1,0 +1,224 @@
+{
+  "project": "Smart Print - Photo Print Manager",
+  "version": "1.0",
+  "last_updated": "2026-02-09",
+  "features": [
+    {
+      "id": "F001",
+      "name": "Project Scaffolding",
+      "description": "Electron + React + TypeScript application setup with electron-vite, Tailwind CSS, shadcn/ui, and all core dependencies. Basic window displaying 'Photo Print Manager'. Includes electron-builder config for Windows portable .exe, TypeScript strict configs for main/renderer/preload, ESLint + Prettier.",
+      "priority": "critical",
+      "status": "implemented",
+      "depends_on": [],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. Run npm install - all dependencies install without errors",
+        "2. Run npm run dev - Electron window opens",
+        "3. Window displays 'Photo Print Manager' centered",
+        "4. DevTools accessible in dev mode",
+        "5. Run npm run build - produces Windows portable .exe",
+        "6. TypeScript compilation passes with no errors"
+      ],
+      "test_results": "npm install succeeds, npm run dev opens window, electron-vite build passes, TypeScript compiles clean on both node and web configs",
+      "implementation_date": "2026-02-09",
+      "files_modified": [
+        "package.json",
+        "electron-builder.yml",
+        "electron.vite.config.ts",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "tsconfig.web.json",
+        "src/main/index.ts",
+        "src/preload/index.ts",
+        "src/preload/index.d.ts",
+        "src/renderer/index.html",
+        "src/renderer/src/App.tsx",
+        "src/renderer/src/main.tsx",
+        "src/renderer/src/assets/main.css",
+        "src/renderer/src/lib/utils.ts"
+      ]
+    },
+    {
+      "id": "F002",
+      "name": "Printer Integration Module",
+      "description": "Printer discovery, queue management, and health monitoring. Discovers all Windows printers with name, driver, status, paper sizes/types. Lazy-loaded to avoid blocking startup. Caches printer capabilities in electron-store. Print job submission, queue health checks, multi-printer load balancing (up to 4). Fallback to next printer on failure.",
+      "priority": "high",
+      "status": "implemented",
+      "depends_on": ["F001"],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. Application discovers available printers on startup (lazy)",
+        "2. Printer list shows name, driver, status, paper sizes, paper types",
+        "3. Printer capabilities are cached in electron-store",
+        "4. Print job can be submitted to a specific printer",
+        "5. Queue health check returns accurate status",
+        "6. With multiple printers, jobs are load-balanced",
+        "7. Offline printer is handled gracefully with fallback",
+        "8. All operations are logged via winston",
+        "9. Unit tests pass for core printer functions"
+      ],
+      "test_results": "TypeScript compiles clean. Needs testing with real printers on Windows.",
+      "implementation_date": "2026-02-09",
+      "files_modified": [
+        "src/main/printer/manager.ts",
+        "src/main/printer/queue.ts",
+        "src/main/printer/health.ts",
+        "src/main/printer/index.ts"
+      ]
+    },
+    {
+      "id": "F003",
+      "name": "Local File Monitoring",
+      "description": "Chokidar-based directory watcher for Local mode. Watches user-specified directory for new JPG/PNG files (max 20MB). Verifies file transfer completion by comparing filename-embedded size with actual file size. Moves printed files to 'Printed Photos' directory. Emits photo-ready, photo-printed, watch-error events. Handles locked files, permission issues, disk space.",
+      "priority": "high",
+      "status": "implemented",
+      "depends_on": ["F001"],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. Configure watch directory in settings",
+        "2. Drop a JPG file into watched directory - photo-ready event fires",
+        "3. Drop a PNG file - also detected correctly",
+        "4. File larger than 20MB is rejected",
+        "5. Incomplete file (size mismatch) is not processed",
+        "6. After printing, file moves to 'Printed Photos' directory",
+        "7. Locked file is handled without crash",
+        "8. All file operations are logged",
+        "9. watch-error event fires on permission issues"
+      ],
+      "test_results": "TypeScript compiles clean. Needs testing with real file drops.",
+      "implementation_date": "2026-02-09",
+      "files_modified": [
+        "src/main/watcher/local.ts",
+        "src/main/watcher/index.ts"
+      ]
+    },
+    {
+      "id": "F004",
+      "name": "Cloud API Integration",
+      "description": "Cloud mode with device registration (12-digit key), secure token storage, API polling every 15s (configurable), photo download with size verification, print confirmation POST, connection health checks every 60s. Axios client with interceptors, retry logic with exponential backoff, token refresh.",
+      "priority": "high",
+      "status": "implemented",
+      "depends_on": ["F001"],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. Register device with valid 12-digit key - receives token",
+        "2. Invalid key shows user-friendly error",
+        "3. Token is stored securely in electron-store",
+        "4. Polling fetches pending photos every 15 seconds",
+        "5. Photos download correctly with size verification",
+        "6. Print confirmation POST succeeds after printing",
+        "7. Health check indicator shows connection status",
+        "8. Network disconnection is handled gracefully with retry",
+        "9. All API interactions are logged",
+        "10. Exponential backoff works on transient failures"
+      ],
+      "test_results": "TypeScript compiles clean. Needs testing with real API endpoint.",
+      "implementation_date": "2026-02-09",
+      "files_modified": [
+        "src/main/api/client.ts",
+        "src/main/api/endpoints.ts",
+        "src/main/api/index.ts",
+        "src/main/watcher/cloud.ts"
+      ]
+    },
+    {
+      "id": "F005",
+      "name": "UI - Settings Screen",
+      "description": "Settings screen for printer configuration, mode selection (Local/Cloud), watch directory picker, API registration, and general preferences. Must work at 1366x768 minimum. Modern aesthetic inspired by VSCode/Figma/Linear/Raycast. WCAG AA accessible. No purple gradients.",
+      "priority": "medium",
+      "status": "implemented",
+      "depends_on": ["F001"],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. Settings screen renders at 1366x768 without overflow",
+        "2. Can select between Local and Cloud mode",
+        "3. Local mode: can pick watch directory",
+        "4. Cloud mode: can enter 12-digit registration key",
+        "5. Printer selection and configuration works",
+        "6. Settings persist across app restarts",
+        "7. Accessible with keyboard navigation",
+        "8. Renders correctly at 4K resolution"
+      ],
+      "test_results": "B3 'Soft Studio' design implemented and wired to Zustand stores. Light/dark mode works. Needs testing for settings persistence.",
+      "implementation_date": "2026-02-09",
+      "files_modified": [
+        "src/renderer/src/screens/SettingsB3.tsx",
+        "src/renderer/src/stores/settings.ts"
+      ]
+    },
+    {
+      "id": "F006",
+      "name": "UI - Live Monitor Screen",
+      "description": "Real-time print status monitoring screen. Shows active print jobs, queue status, printer health, recent activity. Optimized for glanceability at live events. Must work at 1366x768 minimum. Subtle animations for status changes.",
+      "priority": "medium",
+      "status": "implemented",
+      "depends_on": ["F001", "F002"],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. Monitor screen shows real-time print job status",
+        "2. Printer health indicators update correctly",
+        "3. Queue depth is visible",
+        "4. Recent activity log shows completed prints",
+        "5. Status changes animate subtly",
+        "6. Screen is readable in bright and dim lighting",
+        "7. Renders at 1366x768 without issues",
+        "8. Information hierarchy is clear at a glance"
+      ],
+      "test_results": "B3 design with animated counters, pulsing indicators, level gauges. Wired to printer/gallery stores with 5s auto-refresh. Needs real printer testing.",
+      "implementation_date": "2026-02-09",
+      "files_modified": [
+        "src/renderer/src/screens/MonitorB3.tsx",
+        "src/renderer/src/stores/printer.ts"
+      ]
+    },
+    {
+      "id": "F007",
+      "name": "UI - Gallery Screen",
+      "description": "Photo browser and history screen. Shows printed photos, pending photos, and photo details. Thumbnail grid with preview. Filter and search capabilities. Must work at 1366x768 minimum.",
+      "priority": "medium",
+      "status": "implemented",
+      "depends_on": ["F001"],
+      "blocked_reason": "",
+      "tested": false,
+      "testing_steps": [
+        "1. Gallery shows thumbnail grid of photos",
+        "2. Can click to preview full photo",
+        "3. Shows print status per photo (pending/printed/error)",
+        "4. Filter by status works",
+        "5. Handles large number of photos without lag",
+        "6. Renders correctly at 1366x768",
+        "7. Thumbnail loading is performant"
+      ],
+      "test_results": "B3 design with hover scale, detail panel, batch operations, search/filter. Wired to gallery/printer/watcher stores. Shows empty state when no photos.",
+      "implementation_date": "2026-02-09",
+      "files_modified": [
+        "src/renderer/src/screens/GalleryB3.tsx",
+        "src/renderer/src/stores/gallery.ts"
+      ]
+    }
+  ],
+  "schema_version": "1.1",
+  "schema_notes": {
+    "status_values": ["pending", "in_progress", "implemented", "needs_verification", "blocked"],
+    "priority_values": ["critical", "high", "medium", "low"],
+    "rules": [
+      "DO NOT remove features from this list",
+      "DO NOT modify feature descriptions or testing_steps",
+      "ONLY update: status, tested, test_results, implementation_date, files_modified, blocked_reason",
+      "Always run testing_steps before marking as implemented",
+      "Document actual test results in test_results field",
+      "When status is 'blocked', blocked_reason is REQUIRED",
+      "Check depends_on before starting a feature - dependencies must be implemented first"
+    ],
+    "field_descriptions": {
+      "depends_on": "Array of feature IDs that must be completed before this feature can start",
+      "blocked_reason": "Required explanation when status is 'blocked' (e.g., 'Waiting on API deployment')"
+    }
+  }
+}

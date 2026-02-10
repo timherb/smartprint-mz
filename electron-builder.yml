@@ -1,0 +1,29 @@
+appId: com.smartprint.app
+productName: Smart Print
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{CLAUDE.md,progress.md,features_list.json,requirements.md}'
+  - '!{*.docx}'
+asarUnpack:
+  - resources/**
+win:
+  executableName: SmartPrint
+  target:
+    - target: portable
+      arch:
+        - x64
+portable:
+  artifactName: SmartPrint-${version}-portable.${ext}
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: Smart Print
+  uninstallDisplayName: Smart Print
+  createDesktopShortcut: always
+npmRebuild: false

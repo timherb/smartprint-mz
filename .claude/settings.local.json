@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(textutil:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx electron-vite build:*)",
+      "Bash(timeout 15 npx electron-vite dev:*)",
+      "Bash(gtimeout 15 npx electron-vite:*)",
+      "Bash(git init:*)",
+      "Bash(git status:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

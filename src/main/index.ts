@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, screen } from 'electron'
 import { join, extname } from 'path'
 import { readFile, readdir, stat } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -102,11 +102,16 @@ setupCloudWatcherEvents()
 // ---------------------------------------------------------------------------
 
 function createWindow(): void {
+  const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
+  const winWidth = Math.max(1366, Math.round(screenW * 0.55))
+  const winHeight = Math.max(768, Math.round(screenH * 0.8))
+
   mainWindowRef = new BrowserWindow({
-    width: 1366,
-    height: 768,
+    width: winWidth,
+    height: winHeight,
     minWidth: 1366,
     minHeight: 768,
+    center: true,
     show: false,
     autoHideMenuBar: true,
     title: 'Smart Print',

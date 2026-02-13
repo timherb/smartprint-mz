@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/stores/theme'
 import { useSettings } from '@/stores/settings'
@@ -20,9 +20,6 @@ import {
 import SettingsB3 from '@/screens/SettingsB3'
 import MonitorB3 from '@/screens/MonitorB3'
 import GalleryB3 from '@/screens/GalleryB3'
-
-// Font import — Plus Jakarta Sans + JetBrains Mono
-// @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap')
 
 type Page = 'settings' | 'monitor' | 'gallery'
 
@@ -57,6 +54,24 @@ export default function AppLayoutB3(): React.JSX.Element {
   const mode = useSettings((s) => s.mode)
   const { theme, toggle } = useTheme()
 
+  // ── Keyboard: Ctrl+Tab / Ctrl+Shift+Tab to cycle pages ──
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (!e.ctrlKey || e.key !== 'Tab') return
+    e.preventDefault()
+    setActivePage((current) => {
+      const idx = navItems.findIndex((n) => n.id === current)
+      const next = e.shiftKey
+        ? (idx - 1 + navItems.length) % navItems.length
+        : (idx + 1) % navItems.length
+      return navItems[next].id
+    })
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
+
   // ── Mount: subscribe to real-time events + restore persisted state ──
   useEffect(() => {
     const unsubPrinter = usePrinter.getState().subscribeToEvents()
@@ -87,9 +102,6 @@ export default function AppLayoutB3(): React.JSX.Element {
       className="flex h-screen w-screen flex-col bg-background"
       style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}
     >
-      {/* Font link injected via style tag */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');`}</style>
-
       {/* ── Frosted glass floating navigation bar ──────────────── */}
       <header
         className={cn(

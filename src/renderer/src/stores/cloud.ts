@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { useGallery } from '@/stores/gallery'
 import { useSettings } from '@/stores/settings'
 import { usePrinter } from '@/stores/printer'
 
@@ -100,8 +99,6 @@ export const useCloud = create<CloudState>((set, get) => ({
     _cloudSubscribed = true
 
     const unsubPhotoReady = window.api.cloud.onPhotoReady((payload) => {
-      useGallery.getState().addPhoto(payload.filename, payload.filePath, 0)
-
       // Auto-print: submit immediately if enabled and printers are configured
       const { autoPrint, printerPool, copies } = useSettings.getState()
       if (autoPrint && printerPool.length > 0) {

@@ -122,48 +122,16 @@ function formatElapsed(startedAt: number | null, completedAt: number | null): st
   return `${mins}:${String(secs).padStart(2, '0')}`
 }
 
-/** Derive activity events from gallery photos */
+/** Derive activity events from gallery photos (printed photos only) */
 function deriveActivityFromPhotos(photos: Photo[]): ActivityEvent[] {
-  // Sort by most recent first based on addedAt (and printedAt if available)
-  const sorted = [...photos].sort((a, b) => {
-    const aTime = a.printedAt ?? a.addedAt
-    const bTime = b.printedAt ?? b.addedAt
-    return bTime - aTime
-  })
+  const sorted = [...photos].sort((a, b) => b.printedAt - a.printedAt)
 
-  return sorted.slice(0, 15).map((photo): ActivityEvent => {
-    switch (photo.status) {
-      case 'printed':
-        return {
-          id: `activity-${photo.id}-printed`,
-          type: 'print',
-          message: `${photo.filename} printed successfully${photo.printer ? ` on ${photo.printer}` : ''}`,
-          timestamp: formatTime(photo.printedAt ?? photo.addedAt),
-        }
-      case 'error':
-        return {
-          id: `activity-${photo.id}-error`,
-          type: 'error',
-          message: `${photo.filename} failed${photo.error ? ` -- ${photo.error}` : ''}`,
-          timestamp: formatTime(photo.addedAt),
-        }
-      case 'printing':
-        return {
-          id: `activity-${photo.id}-printing`,
-          type: 'queue',
-          message: `${photo.filename} is printing${photo.printer ? ` on ${photo.printer}` : ''}`,
-          timestamp: formatTime(photo.addedAt),
-        }
-      case 'pending':
-      default:
-        return {
-          id: `activity-${photo.id}-pending`,
-          type: 'queue',
-          message: `${photo.filename} added to queue`,
-          timestamp: formatTime(photo.addedAt),
-        }
-    }
-  })
+  return sorted.slice(0, 15).map((photo): ActivityEvent => ({
+    id: `activity-${photo.id}-printed`,
+    type: 'print',
+    message: `${photo.filename} printed successfully`,
+    timestamp: formatTime(photo.printedAt),
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +212,7 @@ function LastImagePreview({ photo }: { photo: Photo }): React.JSX.Element {
             {photo.filename}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {new Date(photo.addedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            {new Date(photo.printedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             {photo.sizeBytes > 0 && ` \u00b7 ${(photo.sizeBytes / 1024 / 1024).toFixed(1)} MB`}
           </p>
         </div>

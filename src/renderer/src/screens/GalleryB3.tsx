@@ -9,11 +9,9 @@ import {
   X,
   ZoomIn,
   Printer,
-  Trash2,
   Check,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Image as ImageIcon,
   Grid3X3,
   List,
@@ -34,7 +32,6 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type PhotoStatus = 'printed' | 'pending' | 'printing' | 'error'
 type ViewMode = 'grid' | 'list'
 type SortMode = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'size'
 
@@ -42,15 +39,12 @@ interface DisplayPhoto {
   id: string
   filename: string
   filepath: string
-  status: PhotoStatus
+  status: 'printed'
   timestamp: string
   date: string
   size: string
   sizeBytes: number
-  printer: string | null
-  printedAt: number | null
-  addedAt: number
-  error: string | null
+  printedAt: number
   hue: number
   saturation: number
   lightness: number
@@ -112,14 +106,11 @@ function toDisplayPhoto(photo: StorePhoto): DisplayPhoto {
     filename: photo.filename,
     filepath: photo.filepath,
     status: photo.status,
-    timestamp: formatTime(photo.addedAt),
-    date: formatDate(photo.addedAt),
+    timestamp: formatTime(photo.printedAt),
+    date: formatDate(photo.printedAt),
     size: formatBytes(photo.sizeBytes),
     sizeBytes: photo.sizeBytes,
-    printer: photo.printer,
     printedAt: photo.printedAt,
-    addedAt: photo.addedAt,
-    error: photo.error,
     hue,
     saturation,
     lightness,
@@ -130,26 +121,9 @@ function toDisplayPhoto(photo: StorePhoto): DisplayPhoto {
 // Status config
 // ---------------------------------------------------------------------------
 
-const STATUS_DOT: Record<PhotoStatus, string> = {
-  printed: 'bg-emerald-500',
-  printing: 'bg-blue-500',
-  pending: 'bg-[#c57d3c]',
-  error: 'bg-red-500',
-}
-
-const STATUS_TEXT: Record<PhotoStatus, string> = {
-  printed: 'text-emerald-500',
-  printing: 'text-blue-500',
-  pending: 'text-[#c57d3c]',
-  error: 'text-red-500',
-}
-
-const STATUS_LABEL: Record<PhotoStatus, string> = {
-  printed: 'Printed',
-  printing: 'Printing',
-  pending: 'Pending',
-  error: 'Error',
-}
+const STATUS_DOT = { printed: 'bg-emerald-500' } as const
+const STATUS_TEXT = { printed: 'text-emerald-500' } as const
+const STATUS_LABEL = { printed: 'Printed' } as const
 
 // ---------------------------------------------------------------------------
 // Filter chip
@@ -402,7 +376,6 @@ function DetailModal({
   hasPrev,
   hasNext,
   onPrint,
-  onMoveToProcessed,
 }: {
   photo: DisplayPhoto
   onClose: () => void
@@ -411,7 +384,6 @@ function DetailModal({
   hasPrev: boolean
   hasNext: boolean
   onPrint: () => void
-  onMoveToProcessed: () => void
 }): React.JSX.Element {
   const bgColor = `hsl(${photo.hue}, ${photo.saturation}%, ${photo.lightness}%)`
   const bgColorLight = `hsl(${photo.hue}, ${photo.saturation + 10}%, ${photo.lightness + 8}%)`
@@ -430,23 +402,9 @@ function DetailModal({
     { icon: Camera, label: 'Filename', value: photo.filename, mono: true },
     { icon: FolderOpen, label: 'Path', value: photo.filepath, mono: true },
     { icon: Copy, label: 'File Size', value: photo.size, mono: true },
-    { icon: Clock, label: 'Added', value: `${photo.date} at ${photo.timestamp}` },
+    { icon: Aperture, label: 'Printed At', value: `${photo.date} at ${photo.timestamp}` },
     { icon: CircleDot, label: 'Status', value: STATUS_LABEL[photo.status] },
   ]
-
-  if (photo.printer) {
-    metaRows.push({ icon: Printer, label: 'Printer', value: photo.printer })
-  }
-  if (photo.printedAt) {
-    metaRows.push({
-      icon: Aperture,
-      label: 'Printed At',
-      value: `${formatDate(photo.printedAt)} at ${formatTime(photo.printedAt)}`,
-    })
-  }
-  if (photo.error) {
-    metaRows.push({ icon: X, label: 'Error', value: photo.error })
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
@@ -650,8 +608,8 @@ export default function GalleryB3(): React.JSX.Element {
       })
       .sort((a, b) => {
         switch (sortMode) {
-          case 'newest': return b.addedAt - a.addedAt
-          case 'oldest': return a.addedAt - b.addedAt
+          case 'newest': return b.printedAt - a.printedAt
+          case 'oldest': return a.printedAt - b.printedAt
           case 'name-asc': return a.filename.localeCompare(b.filename)
           case 'name-desc': return b.filename.localeCompare(a.filename)
           case 'size': return b.sizeBytes - a.sizeBytes
@@ -943,7 +901,7 @@ export default function GalleryB3(): React.JSX.Element {
             </p>
             <button
               type="button"
-              onClick={() => { setSearchQuery(''); setStatusFilter('all') }}
+              onClick={() => setSearchQuery('')}
               className="mt-5 rounded-full bg-secondary px-5 py-2.5 text-sm font-medium text-foreground transition-all duration-300 hover:bg-card hover:shadow-sm"
             >
               Reset Filters
@@ -1038,7 +996,6 @@ export default function GalleryB3(): React.JSX.Element {
           hasPrev={detailIndex > 0}
           hasNext={detailIndex < filteredPhotos.length - 1}
           onPrint={() => handleDetailReprint(filteredPhotos[detailIndex])}
-          onMoveToProcessed={() => {}}
         />
       )}
     </div>

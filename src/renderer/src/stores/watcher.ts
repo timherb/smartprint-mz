@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { useGallery } from '@/stores/gallery'
+import { useSettings } from '@/stores/settings'
+import { usePrinter } from '@/stores/printer'
 
 interface WatcherState {
   running: boolean
@@ -10,10 +11,14 @@ interface WatcherState {
   stop: () => Promise<void>
   moveToProcessed: (filepath: string) => Promise<void>
   refreshStatus: () => Promise<void>
+  scanAndPrint: () => Promise<void>
 
   // Event subscriber
   subscribe: () => () => void
 }
+
+// Guard against StrictMode double-mount registering duplicate IPC listeners
+let _watcherSubscribed = false
 
 export const useWatcher = create<WatcherState>((set, get) => ({
   running: false,
@@ -54,31 +59,50 @@ export const useWatcher = create<WatcherState>((set, get) => ({
     }
   },
 
+  scanAndPrint: async () => {
+    const directory = get().directory ?? useSettings.getState().localDirectory
+    if (!directory) return
+
+    const { copies } = useSettings.getState()
+    try {
+      const result = await window.api.watcher.scanPending(directory)
+      if (result.success && result.files.length > 0) {
+        const printer = usePrinter.getState()
+        for (const file of result.files) {
+          await printer.submitJob(file.filename, file.filepath, { copies })
+        }
+      }
+    } catch (err) {
+      console.error('Failed to scan and print pending files:', err)
+    }
+  },
+
   subscribe: () => {
-    const gallery = useGallery.getState()
+    if (_watcherSubscribed) return () => {}
+    _watcherSubscribed = true
 
     const unsubPhotoReady = window.api.watcher.onPhotoReady((payload) => {
-      gallery.addPhoto(payload.filename, payload.filepath, payload.sizeBytes)
+      // Auto-print: submit immediately if enabled and printers are configured
+      const { autoPrint, printerPool, copies } = useSettings.getState()
+      if (autoPrint && printerPool.length > 0) {
+        usePrinter.getState().submitJob(payload.filename, payload.filepath, { copies })
+      }
     })
 
-    const unsubPhotoPrinted = window.api.watcher.onPhotoPrinted((payload) => {
-      gallery.updatePhotoStatus(payload.filename, 'printed', {
-        printer: payload.destination
-      })
+    const unsubPhotoPrinted = window.api.watcher.onPhotoPrinted(() => {
+      // Refresh gallery when a photo is printed (it moved to Printed Photos folder)
+      // Gallery will pick it up on next scan
     })
 
     const unsubError = window.api.watcher.onError((payload) => {
       console.error('Watcher error:', payload.error, payload.filepath)
-      if (payload.filepath) {
-        const filename = payload.filepath.split('/').pop() ?? payload.filepath
-        gallery.updatePhotoStatus(filename, 'error', { error: payload.error })
-      }
     })
 
     // Sync initial status
     get().refreshStatus()
 
     return () => {
+      _watcherSubscribed = false
       unsubPhotoReady()
       unsubPhotoPrinted()
       unsubError()

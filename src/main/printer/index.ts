@@ -34,7 +34,8 @@ export {
   getJob,
   cancelJob,
   getQueueSnapshot,
-  clearFinishedJobs
+  clearFinishedJobs,
+  setOnJobDone
 } from './queue'
 
 export type {

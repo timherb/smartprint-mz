@@ -92,6 +92,18 @@ const api = {
   openDirectory: (): Promise<{ canceled: boolean; path: string }> =>
     ipcRenderer.invoke('dialog:open-directory'),
 
+  // File: read image as data URL for thumbnails
+  readImageAsDataUrl: (filepath: string): Promise<string | null> =>
+    ipcRenderer.invoke('file:read-as-data-url', filepath),
+
+  // Gallery: scan printed photos folder
+  gallery: {
+    scanPrintedFolder: (directory: string): Promise<{
+      success: boolean
+      photos: Array<{ filename: string; filepath: string; sizeBytes: number; printedAt: number }>
+    }> => ipcRenderer.invoke('gallery:scan-printed-folder', directory),
+  },
+
   // Cloud API
   cloud: {
     register: (key: string): Promise<{ success: boolean; error?: string }> =>
@@ -163,6 +175,11 @@ const api = {
     status: (): Promise<{ running: boolean; directory: string | null }> =>
       ipcRenderer.invoke('watcher:status'),
 
+    scanPending: (directory: string): Promise<{
+      success: boolean
+      files: Array<{ filename: string; filepath: string; sizeBytes: number }>
+    }> => ipcRenderer.invoke('watcher:scan-pending', directory),
+
     onPhotoReady: (
       callback: EventCallback<{ filepath: string; filename: string; sizeBytes: number }>
     ): (() => void) => {
@@ -226,9 +243,10 @@ const api = {
 
     submitJob: (
       filename: string,
+      filepath: string,
       options?: PrintJobOptionsDTO
     ): Promise<SubmitJobResultDTO> =>
-      ipcRenderer.invoke('printer:submit-job', filename, options),
+      ipcRenderer.invoke('printer:submit-job', filename, filepath, options),
 
     getJob: (jobId: string): Promise<PrintJobDTO | null> =>
       ipcRenderer.invoke('printer:get-job', jobId),

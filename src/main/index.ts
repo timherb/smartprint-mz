@@ -1,7 +1,9 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join } from 'path'
+import { join, extname, basename } from 'path'
+import { readFile, readdir, stat } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { setupAutoUpdater } from './updater'
 import { LocalWatcher } from './watcher'
 import { CloudWatcher } from './watcher/cloud'
 import {
@@ -19,7 +21,8 @@ import {
   checkHealth,
   startHealthMonitor,
   stopHealthMonitor,
-  getMediaSizes
+  getMediaSizes,
+  setOnJobDone
 } from './printer'
 
 // ---------------------------------------------------------------------------
@@ -34,9 +37,11 @@ const localWatcher = new LocalWatcher()
 
 const cloudWatcher = new CloudWatcher()
 
+let mainWindowRef: BrowserWindow | null = null
+
 function getMainWindow(): BrowserWindow | null {
-  const windows = BrowserWindow.getAllWindows()
-  return windows.length > 0 ? windows[0] : null
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) return mainWindowRef
+  return null
 }
 
 function setupWatcherEvents(): void {
@@ -97,7 +102,7 @@ setupCloudWatcherEvents()
 // ---------------------------------------------------------------------------
 
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindowRef = new BrowserWindow({
     width: 1366,
     height: 768,
     minWidth: 1366,
@@ -108,23 +113,24 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webSecurity: false
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  mainWindowRef.on('ready-to-show', () => {
+    mainWindowRef!.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  mainWindowRef.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    mainWindowRef.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindowRef.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
@@ -133,6 +139,15 @@ app.whenReady().then(() => {
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  // Auto-move files to "Printed Photos" folder after print completes or is cancelled
+  setOnJobDone((job) => {
+    if ((job.status === 'completed' || job.status === 'cancelled') && job.filepath) {
+      localWatcher.moveToProcessed(job.filepath).catch((err) => {
+        console.error('[onJobDone] Failed to move file to processed:', err)
+      })
+    }
   })
 
   // IPC handlers will be registered here as features are built
@@ -150,6 +165,64 @@ app.whenReady().then(() => {
       return { canceled: true, path: '' }
     }
     return { canceled: false, path: result.filePaths[0] }
+  })
+
+  // File: read image as data URL for renderer thumbnails
+  ipcMain.handle('file:read-as-data-url', async (_event, filepath: string) => {
+    try {
+      const data = await readFile(filepath)
+      const ext = extname(filepath).toLowerCase()
+      const mime = ext === '.png' ? 'image/png' : 'image/jpeg'
+      return `data:${mime};base64,${data.toString('base64')}`
+    } catch {
+      return null
+    }
+  })
+
+  // Gallery: scan printed photos folder
+  const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png'])
+  ipcMain.handle('gallery:scan-printed-folder', async (_event, directory: string) => {
+    try {
+      const printedDir = join(directory, 'Printed Photos')
+      const entries = await readdir(printedDir)
+      const photos: Array<{ filename: string; filepath: string; sizeBytes: number; printedAt: number }> = []
+      for (const entry of entries) {
+        const ext = extname(entry).toLowerCase()
+        if (!ALLOWED_IMAGE_EXTS.has(ext)) continue
+        const filepath = join(printedDir, entry)
+        const info = await stat(filepath)
+        if (!info.isFile()) continue
+        photos.push({
+          filename: entry,
+          filepath,
+          sizeBytes: info.size,
+          printedAt: info.mtimeMs
+        })
+      }
+      return { success: true, photos }
+    } catch {
+      return { success: true, photos: [] }
+    }
+  })
+
+  // Watcher: scan pending files in watch directory (for auto-print toggle)
+  ipcMain.handle('watcher:scan-pending', async (_event, directory: string) => {
+    try {
+      const entries = await readdir(directory)
+      const files: Array<{ filename: string; filepath: string; sizeBytes: number }> = []
+      for (const entry of entries) {
+        const ext = extname(entry).toLowerCase()
+        if (!ALLOWED_IMAGE_EXTS.has(ext)) continue
+        if (entry === 'Printed Photos') continue
+        const filepath = join(directory, entry)
+        const info = await stat(filepath)
+        if (!info.isFile()) continue
+        files.push({ filename: entry, filepath, sizeBytes: info.size })
+      }
+      return { success: true, files }
+    } catch {
+      return { success: true, files: [] }
+    }
   })
 
   // Watcher IPC handlers
@@ -235,8 +308,8 @@ app.whenReady().then(() => {
     return getMediaSizes(printerName)
   })
 
-  ipcMain.handle('printer:submit-job', async (_event, filename: string, options?: Record<string, unknown>) => {
-    return submitPrintJob(filename, options)
+  ipcMain.handle('printer:submit-job', async (_event, filename: string, filepath: string, options?: Record<string, unknown>) => {
+    return submitPrintJob(filename, filepath, options)
   })
 
   ipcMain.handle('printer:get-job', async (_event, jobId: string) => {
@@ -271,6 +344,11 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+
+  // Set up auto-updater after window is created
+  if (mainWindowRef) {
+    setupAutoUpdater(mainWindowRef)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

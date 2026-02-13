@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { useGallery } from '@/stores/gallery'
+import { useSettings } from '@/stores/settings'
+import { usePrinter } from '@/stores/printer'
 
 interface CloudState {
   registered: boolean
@@ -18,6 +20,9 @@ interface CloudState {
   // Event subscriber
   subscribe: () => () => void
 }
+
+// Guard against StrictMode double-mount registering duplicate IPC listeners
+let _cloudSubscribed = false
 
 export const useCloud = create<CloudState>((set, get) => ({
   registered: false,
@@ -91,10 +96,17 @@ export const useCloud = create<CloudState>((set, get) => ({
   },
 
   subscribe: () => {
-    const gallery = useGallery.getState()
+    if (_cloudSubscribed) return () => {}
+    _cloudSubscribed = true
 
     const unsubPhotoReady = window.api.cloud.onPhotoReady((payload) => {
-      gallery.addPhoto(payload.filename, payload.filePath, 0)
+      useGallery.getState().addPhoto(payload.filename, payload.filePath, 0)
+
+      // Auto-print: submit immediately if enabled and printers are configured
+      const { autoPrint, printerPool, copies } = useSettings.getState()
+      if (autoPrint && printerPool.length > 0) {
+        usePrinter.getState().submitJob(payload.filename, payload.filePath, { copies })
+      }
     })
 
     const unsubError = window.api.cloud.onError((payload) => {
@@ -109,6 +121,7 @@ export const useCloud = create<CloudState>((set, get) => ({
     get().refreshStatus()
 
     return () => {
+      _cloudSubscribed = false
       unsubPhotoReady()
       unsubError()
       unsubConnectionStatus()

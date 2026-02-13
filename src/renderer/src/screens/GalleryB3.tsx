@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { LocalImage } from '@/components/LocalImage'
 import { useGallery, type Photo as StorePhoto } from '@/stores/gallery'
 import { usePrinter } from '@/stores/printer'
-import { useWatcher } from '@/stores/watcher'
+import { useSettings } from '@/stores/settings'
 import {
   Search,
   X,
@@ -227,25 +228,21 @@ function PhotoCard({
           : 'hover:shadow-xl hover:shadow-black/15 hover:scale-[1.03]'
       )}
     >
-      {/* Warm-toned placeholder */}
+      {/* Photo thumbnail with gradient fallback */}
       <div
-        className="aspect-[3/2] w-full"
+        className="relative aspect-[3/2] w-full"
         style={{
           background: `linear-gradient(145deg, ${bgColor} 0%, ${bgColorLight} 55%, ${bgColor} 100%)`,
         }}
       >
-        {/* Subtle light texture */}
-        <div className="absolute inset-0 opacity-[0.04]" style={{
-          backgroundImage: 'radial-gradient(circle at 30% 35%, rgba(255,255,255,0.9) 0%, transparent 50%), radial-gradient(circle at 70% 65%, rgba(255,255,255,0.4) 0%, transparent 40%)',
-        }} />
-
-        {/* Film frame reference */}
-        <div
-          className="absolute bottom-2 right-2.5 text-[9px] tracking-wider text-white/15"
-          style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}
-        >
-          {photo.filename.split('.')[0]}
-        </div>
+        {photo.filepath && (
+          <LocalImage
+            filepath={photo.filepath}
+            alt={photo.filename}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        )}
       </div>
 
       {/* Hover overlay — smooth reveal */}
@@ -349,11 +346,20 @@ function PhotoRow({
 
       {/* Mini thumbnail */}
       <div
-        className="h-9 w-14 shrink-0 rounded-lg"
+        className="relative h-9 w-14 shrink-0 overflow-hidden rounded-lg"
         style={{
           background: `linear-gradient(135deg, ${bgColor} 0%, ${bgColorLight} 100%)`,
         }}
-      />
+      >
+        {photo.filepath && (
+          <LocalImage
+            filepath={photo.filepath}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        )}
+      </div>
 
       {/* Filename */}
       <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
@@ -475,22 +481,30 @@ function DetailModal({
 
           {/* Image */}
           <div
-            className="aspect-[3/2] w-full max-w-2xl rounded-2xl overflow-hidden shadow-lg"
+            className="relative aspect-[3/2] w-full max-w-2xl rounded-2xl overflow-hidden shadow-lg"
             style={{
               background: `linear-gradient(145deg, ${bgColor} 0%, ${bgColorLight} 50%, ${bgColor} 100%)`,
             }}
           >
-            <div className="flex h-full w-full items-center justify-center">
-              <div className="flex flex-col items-center gap-2 opacity-20">
-                <ImageIcon className="h-12 w-12 text-white" />
-                <span
-                  className="text-xs text-white"
-                  style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}
-                >
-                  {photo.filename}
-                </span>
+            {photo.filepath ? (
+              <LocalImage
+                filepath={photo.filepath}
+                alt={photo.filename}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="flex flex-col items-center gap-2 opacity-20">
+                  <ImageIcon className="h-12 w-12 text-white" />
+                  <span
+                    className="text-xs text-white"
+                    style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}
+                  >
+                    {photo.filename}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Next */}
@@ -572,25 +586,8 @@ function DetailModal({
               )}
             >
               <Printer className="h-4 w-4" />
-              {photo.status === 'printed' ? 'Reprint' : 'Print Now'}
+              Reprint
             </button>
-            {photo.status === 'printed' && (
-              <button
-                type="button"
-                onClick={onMoveToProcessed}
-                className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5',
-                  'border border-border bg-secondary text-foreground',
-                  'text-sm font-medium',
-                  'transition-all duration-300 ease-out',
-                  'hover:bg-card hover:shadow-sm hover:scale-[1.01]',
-                  'active:scale-[0.98]',
-                )}
-              >
-                <FolderOpen className="h-4 w-4" />
-                Move to Processed
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -603,15 +600,22 @@ function DetailModal({
 // ---------------------------------------------------------------------------
 
 export default function GalleryB3(): React.JSX.Element {
-  // Store hooks
-  const photos = useGallery((s) => s.photos)
-  const removePhoto = useGallery((s) => s.removePhoto)
+  // Store hooks — subscribe to entire store to ensure re-renders on any change
+  const galleryStore = useGallery()
+  const photos = galleryStore.photos
   const submitJob = usePrinter((s) => s.submitJob)
-  const moveToProcessed = useWatcher((s) => s.moveToProcessed)
+  const localDirectory = useSettings((s) => s.localDirectory)
+  const copies = useSettings((s) => s.copies)
+
+  // Scan printed folder on mount and when directory changes
+  useEffect(() => {
+    if (localDirectory) {
+      galleryStore.scanPrintedFolder(localDirectory)
+    }
+  }, [localDirectory])
 
   // Local UI state
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<PhotoStatus | 'all'>('all')
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
@@ -641,7 +645,6 @@ export default function GalleryB3(): React.JSX.Element {
   const filteredPhotos = useMemo(() => {
     return displayPhotos
       .filter((p) => {
-        if (statusFilter !== 'all' && p.status !== statusFilter) return false
         if (searchQuery && !p.filename.toLowerCase().includes(searchQuery.toLowerCase())) return false
         return true
       })
@@ -655,16 +658,9 @@ export default function GalleryB3(): React.JSX.Element {
           default: return 0
         }
       })
-  }, [displayPhotos, searchQuery, statusFilter, sortMode])
+  }, [displayPhotos, searchQuery, sortMode])
 
-  // Stats — calculated from all photos (not filtered)
-  const stats = useMemo(() => {
-    const total = displayPhotos.length
-    const printed = displayPhotos.filter((p) => p.status === 'printed').length
-    const pending = displayPhotos.filter((p) => p.status === 'pending' || p.status === 'printing').length
-    const error = displayPhotos.filter((p) => p.status === 'error').length
-    return { total, printed, pending, error }
-  }, [displayPhotos])
+  const filteredCount = filteredPhotos.length
 
   // Handlers
   const togglePhotoSelection = useCallback((id: string) => {
@@ -709,40 +705,19 @@ export default function GalleryB3(): React.JSX.Element {
   }
 
   // Batch actions
-  function handleBatchPrint(): void {
+  function handleBatchReprint(): void {
     for (const id of selectedPhotos) {
       const photo = displayPhotos.find((p) => p.id === id)
       if (photo) {
-        void submitJob(photo.filename)
-      }
-    }
-    exitBatchMode()
-  }
-
-  function handleBatchDelete(): void {
-    for (const id of selectedPhotos) {
-      removePhoto(id)
-    }
-    exitBatchMode()
-  }
-
-  function handleBatchMoveToProcessed(): void {
-    for (const id of selectedPhotos) {
-      const photo = displayPhotos.find((p) => p.id === id)
-      if (photo && photo.status === 'printed') {
-        void moveToProcessed(photo.filepath)
+        void submitJob(photo.filename, photo.filepath, { copies })
       }
     }
     exitBatchMode()
   }
 
   // Detail panel actions
-  function handleDetailPrint(photo: DisplayPhoto): void {
-    void submitJob(photo.filename)
-  }
-
-  function handleDetailMoveToProcessed(photo: DisplayPhoto): void {
-    void moveToProcessed(photo.filepath)
+  function handleDetailReprint(photo: DisplayPhoto): void {
+    void submitJob(photo.filename, photo.filepath, { copies })
   }
 
   const sortOptions: { mode: SortMode; label: string; icon: React.ElementType }[] = [
@@ -755,12 +730,6 @@ export default function GalleryB3(): React.JSX.Element {
 
   // Determine if we're in a true empty state (no photos at all) vs filtered empty
   const isEmptyState = displayPhotos.length === 0
-  const hasSelectedPrintedPhotos = useMemo(() => {
-    return Array.from(selectedPhotos).some((id) => {
-      const photo = displayPhotos.find((p) => p.id === id)
-      return photo?.status === 'printed'
-    })
-  }, [selectedPhotos, displayPhotos])
 
   return (
     <div
@@ -776,7 +745,7 @@ export default function GalleryB3(): React.JSX.Element {
           <div className="shrink-0">
             <h1 className="text-xl font-semibold tracking-tight text-foreground">Gallery</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {filteredPhotos.length} of {stats.total} photos
+              {filteredCount} of {displayPhotos.length} printed photos
             </p>
           </div>
 
@@ -907,34 +876,14 @@ export default function GalleryB3(): React.JSX.Element {
           </button>
         </div>
 
-        {/* Filter pills */}
+        {/* Count pill + batch controls */}
         <div className="flex items-center gap-1 px-8 pb-4">
           <StatChip
             label="All"
-            count={stats.total}
-            active={statusFilter === 'all'}
-            onClick={() => setStatusFilter('all')}
-          />
-          <StatChip
-            label="Printed"
-            count={stats.printed}
-            active={statusFilter === 'printed'}
-            onClick={() => setStatusFilter('printed')}
+            count={displayPhotos.length}
+            active
+            onClick={() => {}}
             dotColor="bg-emerald-500"
-          />
-          <StatChip
-            label="Pending"
-            count={stats.pending}
-            active={statusFilter === 'pending'}
-            onClick={() => setStatusFilter('pending')}
-            dotColor="bg-[#c57d3c]"
-          />
-          <StatChip
-            label="Errors"
-            count={stats.error}
-            active={statusFilter === 'error'}
-            onClick={() => setStatusFilter('error')}
-            dotColor="bg-red-500"
           />
 
           {/* Batch info */}
@@ -1063,7 +1012,7 @@ export default function GalleryB3(): React.JSX.Element {
 
             <button
               type="button"
-              onClick={handleBatchPrint}
+              onClick={handleBatchReprint}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold',
                 'bg-[#c57d3c] text-white',
@@ -1073,36 +1022,7 @@ export default function GalleryB3(): React.JSX.Element {
               )}
             >
               <Printer className="h-3.5 w-3.5" />
-              Print
-            </button>
-            {hasSelectedPrintedPhotos && (
-              <button
-                type="button"
-                onClick={handleBatchMoveToProcessed}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium',
-                  'bg-secondary text-foreground',
-                  'transition-all duration-300',
-                  'hover:bg-card hover:shadow-sm',
-                  'active:scale-[0.97]',
-                )}
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                Move to Processed
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleBatchDelete}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium',
-                'text-red-500 transition-all duration-300',
-                'hover:bg-red-500/10',
-                'active:scale-[0.97]',
-              )}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
+              Reprint
             </button>
           </div>
         </div>
@@ -1117,8 +1037,8 @@ export default function GalleryB3(): React.JSX.Element {
           onNext={nextPhoto}
           hasPrev={detailIndex > 0}
           hasNext={detailIndex < filteredPhotos.length - 1}
-          onPrint={() => handleDetailPrint(filteredPhotos[detailIndex])}
-          onMoveToProcessed={() => handleDetailMoveToProcessed(filteredPhotos[detailIndex])}
+          onPrint={() => handleDetailReprint(filteredPhotos[detailIndex])}
+          onMoveToProcessed={() => {}}
         />
       )}
     </div>

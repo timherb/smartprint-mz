@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { stat, mkdir, rename, access, constants } from 'node:fs/promises'
+import { stat, mkdir, rename, access, open, constants } from 'node:fs/promises'
 import { join, basename, extname } from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import winston from 'winston'
@@ -75,32 +75,51 @@ const logger = winston.createLogger({
 })
 
 // ---------------------------------------------------------------------------
-// Helper: parse expected size from filename
+// Helper: verify image file completeness via EOF markers
 // ---------------------------------------------------------------------------
 
+// JPEG files end with the EOI (End of Image) marker: 0xFF 0xD9
+const JPEG_EOI = Buffer.from([0xff, 0xd9])
+// PNG files end with the IEND chunk: 4-byte length (0), "IEND", 4-byte CRC
+const PNG_IEND_TAG = Buffer.from('IEND')
+
 /**
- * Attempt to parse the expected file size (in bytes) from the filename.
- * Convention: the filename contains the expected size as a numeric token,
- * e.g. "photo_1234567.jpg" where 1234567 is the size in bytes.
+ * Verify that an image file is structurally complete by checking for the
+ * format's end-of-file marker. Works with any filename — no naming
+ * convention required.
  *
- * Returns `undefined` if no numeric token is found.
- */
-/**
- * Parse expected file size from filename. Only matches filenames that
- * explicitly encode the size in bytes, e.g.:
- *   - "photo_size_12345678.jpg" → 12345678
- *   - "IMG_4821_bytes_3456789.jpg" → 3456789
+ * - JPEG: last 2 bytes must be 0xFF 0xD9 (EOI marker)
+ * - PNG: last 12 bytes must contain the IEND chunk
  *
- * Regular camera filenames (IMG_4821.jpg, DSC_0142.jpg) return undefined
- * and skip the size check — they pass through to printing.
+ * Returns true if the marker is present, false if missing or unreadable.
  */
-function parseExpectedSize(filename: string): number | undefined {
-  // Only match explicit size markers like _size_NNNN or _bytes_NNNN
-  const sizeMatch = filename.match(/[_-](?:size|bytes)[_-](\d+)/i)
-  if (!sizeMatch) return undefined
-  const candidate = parseInt(sizeMatch[1], 10)
-  // Size must be at least 1KB to be a realistic file size
-  return Number.isFinite(candidate) && candidate >= 1024 ? candidate : undefined
+async function verifyImageComplete(filePath: string, ext: string, sizeBytes: number): Promise<boolean> {
+  let fh
+  try {
+    fh = await open(filePath, 'r')
+
+    if (ext === '.jpg' || ext === '.jpeg') {
+      // Read the last 2 bytes for JPEG EOI marker
+      const buf = Buffer.alloc(2)
+      await fh.read(buf, 0, 2, sizeBytes - 2)
+      return buf.equals(JPEG_EOI)
+    }
+
+    if (ext === '.png') {
+      // The IEND chunk is the last 12 bytes of a valid PNG:
+      // 4 bytes length (00 00 00 00) + 4 bytes "IEND" + 4 bytes CRC
+      const buf = Buffer.alloc(12)
+      await fh.read(buf, 0, 12, sizeBytes - 12)
+      return buf.subarray(4, 8).equals(PNG_IEND_TAG)
+    }
+
+    // Unknown extension — skip validation, allow through
+    return true
+  } catch {
+    return false
+  } finally {
+    await fh?.close()
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +149,12 @@ export class LocalWatcher extends EventEmitter<LocalWatcherEvents> {
 
   /** Begin watching `directory` for new image files. */
   async start(directory: string): Promise<void> {
+    // Skip restart if already watching the same directory
+    if (this.isRunning && this.watchDirectory === directory) {
+      logger.info('Watcher already watching this directory, skipping restart', { directory })
+      return
+    }
+
     if (this.isRunning) {
       logger.warn('Watcher is already running, stopping previous instance first')
       await this.stop()
@@ -313,38 +338,16 @@ export class LocalWatcher extends EventEmitter<LocalWatcherEvents> {
       return
     }
 
-    // Verify file completeness via filename-embedded size
-    const expectedSize = parseExpectedSize(filename)
-    if (expectedSize !== undefined) {
-      if (sizeBytes !== expectedSize) {
-        logger.warn('File size mismatch: transfer may be incomplete', {
-          filename,
-          expectedSize,
-          actualSize: sizeBytes
-        })
-        return
-      }
-      logger.debug('File size verified against filename', {
+    // Verify file is structurally complete via EOF marker
+    const isComplete = await verifyImageComplete(filePath, ext, sizeBytes)
+    if (!isComplete) {
+      logger.warn('File missing EOF marker: transfer may be incomplete', {
         filename,
-        expectedSize,
-        actualSize: sizeBytes
+        sizeBytes
       })
-    } else {
-      logger.debug('No expected size in filename, accepting file as-is', { filename, sizeBytes })
-    }
-
-    // Verify the file is readable (not locked)
-    try {
-      await access(filePath, constants.R_OK)
-    } catch (err) {
-      const error = this.normalizeFileError(err, filePath)
-      logger.warn('File is not readable (possibly locked)', {
-        filename,
-        error: error.message
-      })
-      this.emit('watch-error', { error, filepath: filePath })
       return
     }
+    logger.debug('File EOF marker verified', { filename })
 
     logger.info('Photo ready for printing', { filename, sizeBytes })
     this.emit('photo-ready', { filepath: filePath, filename, sizeBytes })

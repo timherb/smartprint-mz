@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { LocalImage } from '@/components/LocalImage'
 import { usePrinter } from '@/stores/printer'
 import { useGallery } from '@/stores/gallery'
 import { useCloud } from '@/stores/cloud'
@@ -25,6 +26,8 @@ import {
   FileImage,
   Ban,
   Printer,
+  Zap,
+  ZapOff,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -208,9 +211,47 @@ function PulseDot({ color = 'bg-emerald-500', size = 'sm' }: { color?: string; s
 }
 
 // ---------------------------------------------------------------------------
-// Soft gauge bar
+// Last image preview — thumbnail of the most recent photo
 // ---------------------------------------------------------------------------
 
+function LastImagePreview({ photo }: { photo: Photo }): React.JSX.Element {
+  return (
+    <div className="rounded-2xl bg-card p-5 shadow-sm">
+      <div className="flex items-center gap-5">
+        {/* Thumbnail */}
+        <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-xl bg-secondary">
+          {photo.filepath ? (
+            <LocalImage
+              filepath={photo.filepath}
+              alt={photo.filename}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <FileImage className="h-8 w-8 text-muted-foreground opacity-40" />
+            </div>
+          )}
+        </div>
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
+            Last Image
+          </p>
+          <p
+            className="text-sm font-medium text-foreground truncate"
+            style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}
+          >
+            {photo.filename}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {new Date(photo.addedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            {photo.sizeBytes > 0 && ` \u00b7 ${(photo.sizeBytes / 1024 / 1024).toFixed(1)} MB`}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Hero stat card — soft, elevated, with depth
@@ -401,11 +442,11 @@ function QueueCard({ job, onCancel, onRetry }: { job: PrintJob; onCancel: (id: s
               Retry
             </button>
           )}
-          {isQueued && (
+          {(isQueued || isPrinting) && (
             <button
               type="button"
               onClick={() => onCancel(job.id)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-[11px] font-medium text-muted-foreground transition-all duration-300 hover:text-foreground opacity-0 group-hover:opacity-100"
+              className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-[11px] font-medium text-muted-foreground transition-all duration-300 hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100"
             >
               <Ban className="h-3 w-3" />
               Cancel
@@ -569,8 +610,11 @@ export default function MonitorB3(): React.JSX.Element {
   const cancelJob = usePrinter((s) => s.cancelJob)
   const submitJob = usePrinter((s) => s.submitJob)
   const subscribeToEvents = usePrinter((s) => s.subscribeToEvents)
-  const photos = useGallery((s) => s.photos)
+  const photos = useGallery().photos
+  const lastPhoto = photos.length > 0 ? photos[photos.length - 1] : null
   const mode = useSettings((s) => s.mode)
+  const autoPrint = useSettings((s) => s.autoPrint)
+  const setAutoPrint = useSettings((s) => s.setAutoPrint)
   const cloudConnected = useCloud((s) => s.connected)
   const watcherRunning = useWatcher((s) => s.running)
 
@@ -627,19 +671,21 @@ export default function MonitorB3(): React.JSX.Element {
   const healthPrinters = (health?.printers ?? []).filter(
     (p) => pool.length === 0 || pool.includes(p.name)
   )
-  const mappedPrinters: PrinterInfo[] = healthPrinters.map((p, idx) => {
-    // Find if this printer has an active job in the queue
-    const activeJob = queue.find((j) => j.printerName === p.name && j.status === 'printing')
-    return {
-      id: `printer-${idx}`,
-      name: p.displayName || p.name,
-      model: p.name, // API doesn't provide separate model field; use name
-      status: mapPrinterStatus(p.status),
-      jobsPrinted: 0, // TODO: wire when API supports per-printer job count
-      currentJob: activeJob?.filename ?? null,
-      avgPrintTime: '--:--', // TODO: wire when API supports avg print time
-    }
-  })
+  const mappedPrinters: PrinterInfo[] = healthPrinters
+    .filter((p) => mapPrinterStatus(p.status) !== 'offline') // Hide truly offline printers
+    .map((p, idx) => {
+      // Find if this printer has an active job in the queue
+      const activeJob = queue.find((j) => j.printerName === p.name && j.status === 'printing')
+      return {
+        id: `printer-${idx}`,
+        name: p.displayName || p.name,
+        model: p.name, // API doesn't provide separate model field; use name
+        status: mapPrinterStatus(p.status),
+        jobsPrinted: 0, // TODO: wire when API supports per-printer job count
+        currentJob: activeJob?.filename ?? null,
+        avgPrintTime: '--:--', // TODO: wire when API supports avg print time
+      }
+    })
 
   // --- Derive activity feed from gallery photos ---
   const activityEvents = deriveActivityFromPhotos(photos)
@@ -652,15 +698,18 @@ export default function MonitorB3(): React.JSX.Element {
     [cancelJob]
   )
 
-  // --- Handle retry: resubmit the same file ---
+  // --- Handle retry: clear old job, resubmit the file ---
+  const clearFinished = usePrinter((s) => s.clearFinished)
   const handleRetry = useCallback(
-    (jobId: string) => {
+    async (jobId: string) => {
       const job = queue.find((j) => j.id === jobId)
-      if (job) {
-        submitJob(job.filename, job.options as Record<string, unknown>)
-      }
+      if (!job) return
+      // Clear finished/failed jobs first to clean up the queue
+      await clearFinished()
+      // Resubmit
+      await submitJob(job.filename, job.filepath, job.options as Record<string, unknown>)
     },
-    [queue, submitJob]
+    [queue, submitJob, clearFinished]
   )
 
   // --- Computed stats ---
@@ -671,8 +720,8 @@ export default function MonitorB3(): React.JSX.Element {
   const completedCount = queueStats.completed
   const failedCount = queueStats.failed
   const totalCount = queueStats.total
-  const onlinePrinters = health?.printersOnline ?? 0
-  const totalPrinters = healthPrinters.length
+  const onlinePrinters = healthPrinters.filter((p) => mapPrinterStatus(p.status) === 'online').length
+  const totalPrinters = pool.length || healthPrinters.length
 
   return (
     <div
@@ -746,6 +795,38 @@ export default function MonitorB3(): React.JSX.Element {
                   </>
                 )}
               </button>
+
+              {/* Auto-print toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const newValue = !autoPrint
+                  setAutoPrint(newValue)
+                  // When enabling auto-print, scan for pending files and print them
+                  if (newValue) {
+                    useWatcher.getState().scanAndPrint()
+                  }
+                }}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-xs font-semibold',
+                  'transition-all duration-300 hover:scale-[1.01]',
+                  autoPrint
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 shadow-sm'
+                    : 'border-border bg-card text-muted-foreground shadow-sm hover:text-foreground'
+                )}
+              >
+                {autoPrint ? (
+                  <>
+                    <Zap className="h-3.5 w-3.5" />
+                    Auto-Print On
+                  </>
+                ) : (
+                  <>
+                    <ZapOff className="h-3.5 w-3.5" />
+                    Auto-Print Off
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -765,6 +846,9 @@ export default function MonitorB3(): React.JSX.Element {
               icon={Layers}
             />
           </div>
+
+          {/* -- Last image preview -- */}
+          {lastPhoto && <LastImagePreview photo={lastPhoto} />}
 
           {/* -- Main grid: Queue cards (left) + Activity (right) */}
           <div className="grid grid-cols-[1fr_340px] gap-8">

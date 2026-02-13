@@ -13,6 +13,8 @@ interface SettingsState {
   logLevel: LogLevel
   paperSize: string
   printerPool: string[]
+  autoPrint: boolean
+  copies: number
   setMode: (mode: 'local' | 'cloud') => void
   setLocalDirectory: (dir: string) => void
   setCloudApiUrl: (url: string) => void
@@ -22,6 +24,8 @@ interface SettingsState {
   setLogLevel: (level: LogLevel) => void
   setPaperSize: (size: string) => void
   setPrinterPool: (pool: string[]) => void
+  setAutoPrint: (enabled: boolean) => void
+  setCopies: (n: number) => void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -36,6 +40,8 @@ export const useSettings = create<SettingsState>()(
       logLevel: 'info',
       paperSize: '',
       printerPool: [],
+      autoPrint: true,
+      copies: 1,
 
       setMode: (mode) => set({ mode }),
       setLocalDirectory: (dir) => set({ localDirectory: dir }),
@@ -45,7 +51,9 @@ export const useSettings = create<SettingsState>()(
       setHealthInterval: (ms) => set({ healthInterval: ms }),
       setLogLevel: (level) => set({ logLevel: level }),
       setPaperSize: (size) => set({ paperSize: size }),
-      setPrinterPool: (pool) => set({ printerPool: pool })
+      setPrinterPool: (pool) => set({ printerPool: pool }),
+      setAutoPrint: (enabled) => set({ autoPrint: enabled }),
+      setCopies: (n) => set({ copies: Math.max(1, Math.min(10, n)) })
     }),
     {
       name: 'smart-print-settings',
@@ -58,7 +66,9 @@ export const useSettings = create<SettingsState>()(
         healthInterval: state.healthInterval,
         logLevel: state.logLevel,
         paperSize: state.paperSize,
-        printerPool: state.printerPool
+        printerPool: state.printerPool,
+        autoPrint: state.autoPrint,
+        copies: state.copies
       })
     }
   )

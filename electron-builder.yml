@@ -13,6 +13,9 @@ files:
   - '!{*.docx}'
 asarUnpack:
   - resources/**
+publish:
+  provider: generic
+  url: https://YOUR_STORAGE_ACCOUNT.blob.core.windows.net/releases/
 win:
   executableName: SmartPrint
   target:

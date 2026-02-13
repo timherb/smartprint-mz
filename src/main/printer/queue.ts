@@ -6,6 +6,7 @@
  */
 
 import { BrowserWindow } from 'electron'
+import { access, constants } from 'node:fs/promises'
 import winston from 'winston'
 import { selectNextPrinter, getPrinterByName, getPrinterPool } from './manager'
 import type { PrinterInfo } from './manager'
@@ -35,6 +36,7 @@ export interface PrintJobOptions {
 export interface PrintJob {
   id: string
   filename: string
+  filepath: string
   printerName: string
   status: JobStatus
   options: PrintJobOptions
@@ -79,6 +81,14 @@ const jobs: Map<string, PrintJob> = new Map()
 let jobCounter = 0
 const MAX_RETRIES = 2
 
+/** Optional callback invoked when a print job completes or is cancelled. */
+let _onJobDone: ((job: PrintJob) => void) | null = null
+
+/** Register a callback to run after a job completes (success/fail) or is cancelled. */
+export function setOnJobDone(cb: (job: PrintJob) => void): void {
+  _onJobDone = cb
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -112,35 +122,88 @@ function resolvePageSize(
 // ---------------------------------------------------------------------------
 
 async function executePrint(job: PrintJob): Promise<boolean> {
-  const win = BrowserWindow.getAllWindows()[0]
-  if (!win) {
-    throw new Error('No BrowserWindow available to send print command')
+  // Verify the image file still exists
+  try {
+    await access(job.filepath, constants.R_OK)
+  } catch {
+    throw new Error(`Image file not found or not readable: ${job.filepath}`)
   }
 
-  return new Promise<boolean>((resolve) => {
-    const pageSize = resolvePageSize(job.options.paperSize)
-    win.webContents.print(
-      {
-        silent: job.options.silent ?? true,
-        printBackground: true,
-        deviceName: job.printerName,
-        color: job.options.color ?? true,
-        copies: job.options.copies ?? 1,
-        landscape: job.options.landscape ?? false,
-        ...(pageSize ? { pageSize } : {})
-      },
-      (success, failureReason) => {
-        if (!success) {
-          logger.error('Print failed', {
-            jobId: job.id,
-            printer: job.printerName,
-            reason: failureReason
-          })
-        }
-        resolve(success)
-      }
-    )
+  const pageSize = resolvePageSize(job.options.paperSize)
+
+  // Normalize filepath for file:// URL (handle Windows backslashes)
+  const fileUrl = `file://${job.filepath.replace(/\\/g, '/')}`
+
+  const html = `<!DOCTYPE html>
+<html><head><style>
+  @page { margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; background: #fff; }
+  img { max-width: 100%; max-height: 100%; object-fit: contain; }
+</style></head><body>
+  <img id="photo" src="${fileUrl}" />
+</body></html>`
+
+  const printWindow = new BrowserWindow({
+    show: false,
+    width: 800,
+    height: 600,
+    webPreferences: { offscreen: false }
   })
+
+  try {
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+
+    // Wait for the image to finish loading and get its dimensions
+    const dimensions: { w: number; h: number } = await printWindow.webContents.executeJavaScript(`
+      new Promise((resolve, reject) => {
+        const img = document.getElementById('photo');
+        if (img.complete && img.naturalWidth > 0) {
+          resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        } else {
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => reject(new Error('Image failed to load in print window'));
+        }
+      })
+    `)
+
+    // Auto-detect landscape from image dimensions unless explicitly set
+    const landscape = job.options.landscape ?? (dimensions.w > dimensions.h)
+
+    return new Promise<boolean>((resolve) => {
+      printWindow.webContents.print(
+        {
+          silent: job.options.silent ?? true,
+          printBackground: true,
+          deviceName: job.printerName,
+          color: job.options.color ?? true,
+          copies: job.options.copies ?? 1,
+          landscape,
+          ...(pageSize ? { pageSize } : {})
+        },
+        (success, failureReason) => {
+          if (!success) {
+            logger.error('Print failed', {
+              jobId: job.id,
+              printer: job.printerName,
+              reason: failureReason
+            })
+          }
+          resolve(success)
+        }
+      )
+    })
+  } catch (err) {
+    logger.error('Failed to prepare print window', {
+      jobId: job.id,
+      filepath: job.filepath,
+      error: String(err)
+    })
+    throw err
+  } finally {
+    printWindow.destroy()
+  }
 }
 
 /**
@@ -163,6 +226,7 @@ async function printWithFallback(job: PrintJob): Promise<void> {
         job.error = null
         emitPrinterEvent('job:status', { jobId: job.id, status: job.status, printer: job.printerName })
         logger.info('Print job completed', { jobId: job.id, printer: job.printerName })
+        _onJobDone?.(job)
         return
       }
 
@@ -231,13 +295,23 @@ async function findFallbackPrinter(exclude: Set<string>): Promise<PrinterInfo | 
 /**
  * Submit a print job to the queue.
  *
- * @param filename  Path or descriptor of the file to print
+ * @param filename  Display name of the file
+ * @param filepath  Absolute path to the image file on disk
  * @param options   Printing options
  */
 export async function submitPrintJob(
   filename: string,
+  filepath: string,
   options: PrintJobOptions = {}
 ): Promise<SubmitJobResult> {
+  // Deduplicate: skip if this file already has a pending or printing job
+  for (const existing of jobs.values()) {
+    if (existing.filepath === filepath && (existing.status === 'pending' || existing.status === 'printing')) {
+      logger.info('Skipping duplicate print job for file already in queue', { filename, filepath })
+      return { jobId: existing.id, printerName: existing.printerName, status: existing.status }
+    }
+  }
+
   let printerName = options.printerName ?? ''
 
   if (!printerName) {
@@ -251,6 +325,7 @@ export async function submitPrintJob(
   const job: PrintJob = {
     id: generateJobId(),
     filename,
+    filepath,
     printerName,
     status: 'pending',
     options,
@@ -292,6 +367,7 @@ export async function cancelJob(jobId: string): Promise<PrintJob | null> {
     job.completedAt = Date.now()
     emitPrinterEvent('job:status', { jobId: job.id, status: 'cancelled' })
     logger.info('Print job cancelled', { jobId })
+    _onJobDone?.(job)
   }
 
   return job

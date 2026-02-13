@@ -60,9 +60,27 @@ interface WatcherAPI {
   stop: () => Promise<{ success: boolean }>
   moveToProcessed: (filepath: string) => Promise<{ success: boolean }>
   status: () => Promise<{ running: boolean; directory: string | null }>
+  scanPending: (directory: string) => Promise<{
+    success: boolean
+    files: Array<{ filename: string; filepath: string; sizeBytes: number }>
+  }>
   onPhotoReady: (callback: (payload: WatcherPhotoReadyPayload) => void) => () => void
   onPhotoPrinted: (callback: (payload: WatcherPhotoPrintedPayload) => void) => () => void
   onError: (callback: (payload: WatcherErrorPayload) => void) => () => void
+}
+
+interface GalleryPhotoDTO {
+  filename: string
+  filepath: string
+  sizeBytes: number
+  printedAt: number
+}
+
+interface GalleryAPI {
+  scanPrintedFolder: (directory: string) => Promise<{
+    success: boolean
+    photos: GalleryPhotoDTO[]
+  }>
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +123,7 @@ interface PrintJobOptionsDTO {
 interface PrintJobDTO {
   id: string
   filename: string
+  filepath: string
   printerName: string
   status: string
   options: PrintJobOptionsDTO
@@ -158,7 +177,7 @@ interface PrinterAPI {
   getPool: () => Promise<string[]>
   clearCache: () => Promise<{ success: boolean }>
   mediaSizes: (printerName: string) => Promise<PaperSizeDTO[]>
-  submitJob: (filename: string, options?: PrintJobOptionsDTO) => Promise<SubmitJobResultDTO>
+  submitJob: (filename: string, filepath: string, options?: PrintJobOptionsDTO) => Promise<SubmitJobResultDTO>
   getJob: (jobId: string) => Promise<PrintJobDTO | null>
   cancelJob: (jobId: string) => Promise<PrintJobDTO | null>
   queueSnapshot: () => Promise<QueueSnapshotDTO>
@@ -176,6 +195,8 @@ interface PrinterAPI {
 interface SmartPrintAPI {
   ping: () => Promise<string>
   openDirectory: () => Promise<{ canceled: boolean; path: string }>
+  readImageAsDataUrl: (filepath: string) => Promise<string | null>
+  gallery: GalleryAPI
   cloud: CloudAPI
   watcher: WatcherAPI
   printer: PrinterAPI

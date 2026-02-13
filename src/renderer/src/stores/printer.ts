@@ -23,7 +23,7 @@ interface PrinterState {
   // Actions
   discover: (forceRefresh?: boolean) => Promise<void>
   setPool: (names: string[]) => Promise<void>
-  submitJob: (filename: string, options?: Record<string, unknown>) => Promise<void>
+  submitJob: (filename: string, filepath: string, options?: Record<string, unknown>) => Promise<void>
   cancelJob: (jobId: string) => Promise<void>
   refreshQueue: () => Promise<void>
   refreshHealth: () => Promise<void>
@@ -65,9 +65,9 @@ export const usePrinter = create<PrinterState>((set, get) => ({
     }
   },
 
-  submitJob: async (filename, options) => {
+  submitJob: async (filename, filepath, options) => {
     try {
-      await window.api.printer.submitJob(filename, options as Parameters<typeof window.api.printer.submitJob>[1])
+      await window.api.printer.submitJob(filename, filepath, options as Parameters<typeof window.api.printer.submitJob>[2])
       await get().refreshQueue()
     } catch (err) {
       console.error('Failed to submit print job:', err)

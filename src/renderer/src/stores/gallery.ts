@@ -5,59 +5,53 @@ interface Photo {
   filename: string
   filepath: string
   sizeBytes: number
-  status: 'pending' | 'printing' | 'printed' | 'error'
-  addedAt: number
-  printedAt: number | null
-  printer: string | null
-  error: string | null
+  status: 'printed'
+  printedAt: number
 }
 
 interface GalleryState {
   photos: Photo[]
-  addPhoto: (filename: string, filepath: string, sizeBytes: number) => void
-  updatePhotoStatus: (filename: string, status: Photo['status'], extra?: Partial<Photo>) => void
-  removePhoto: (id: string) => void
+  loading: boolean
+  scanPrintedFolder: (directory: string) => Promise<void>
+  refresh: () => Promise<void>
   clearAll: () => void
 }
 
-let nextId = 1
+let _lastDirectory = ''
 
-export const useGallery = create<GalleryState>((set) => ({
+export const useGallery = create<GalleryState>((set, get) => ({
   photos: [],
+  loading: false,
 
-  addPhoto: (filename, filepath, sizeBytes) => {
-    const photo: Photo = {
-      id: String(nextId++),
-      filename,
-      filepath,
-      sizeBytes,
-      status: 'pending',
-      addedAt: Date.now(),
-      printedAt: null,
-      printer: null,
-      error: null
+  scanPrintedFolder: async (directory: string) => {
+    _lastDirectory = directory
+    set({ loading: true })
+    try {
+      const result = await window.api.gallery.scanPrintedFolder(directory)
+      if (result.success) {
+        const photos: Photo[] = result.photos.map((p, i) => ({
+          id: `printed-${i}-${p.filename}`,
+          filename: p.filename,
+          filepath: p.filepath,
+          sizeBytes: p.sizeBytes,
+          status: 'printed' as const,
+          printedAt: p.printedAt
+        }))
+        // Sort newest first
+        photos.sort((a, b) => b.printedAt - a.printedAt)
+        set({ photos })
+      }
+    } catch (err) {
+      console.error('Failed to scan printed folder:', err)
+    } finally {
+      set({ loading: false })
     }
-    set((state) => ({ photos: [...state.photos, photo] }))
   },
 
-  updatePhotoStatus: (filename, status, extra) => {
-    set((state) => ({
-      photos: state.photos.map((photo) => {
-        if (photo.filename !== filename) return photo
-        return {
-          ...photo,
-          status,
-          ...extra,
-          ...(status === 'printed' ? { printedAt: Date.now() } : {})
-        }
-      })
-    }))
-  },
-
-  removePhoto: (id) => {
-    set((state) => ({
-      photos: state.photos.filter((photo) => photo.id !== id)
-    }))
+  refresh: async () => {
+    if (_lastDirectory) {
+      await get().scanPrintedFolder(_lastDirectory)
+    }
   },
 
   clearAll: () => {

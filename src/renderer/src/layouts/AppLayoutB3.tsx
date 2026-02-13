@@ -20,6 +20,7 @@ import {
 import SettingsB3 from '@/screens/SettingsB3'
 import MonitorB3 from '@/screens/MonitorB3'
 import GalleryB3 from '@/screens/GalleryB3'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 type Page = 'settings' | 'monitor' | 'gallery'
 
@@ -38,11 +39,23 @@ const navItems: NavItem[] = [
 function PageContent({ page }: { page: Page }): React.JSX.Element {
   switch (page) {
     case 'settings':
-      return <SettingsB3 />
+      return (
+        <ErrorBoundary label="Settings">
+          <SettingsB3 />
+        </ErrorBoundary>
+      )
     case 'monitor':
-      return <MonitorB3 />
+      return (
+        <ErrorBoundary label="Monitor">
+          <MonitorB3 />
+        </ErrorBoundary>
+      )
     case 'gallery':
-      return <GalleryB3 />
+      return (
+        <ErrorBoundary label="Gallery">
+          <GalleryB3 />
+        </ErrorBoundary>
+      )
   }
 }
 
@@ -53,6 +66,28 @@ export default function AppLayoutB3(): React.JSX.Element {
   const isConnected = useCloud((s) => s.connected)
   const mode = useSettings((s) => s.mode)
   const { theme, toggle } = useTheme()
+
+  // ── Window title: live queue status ────────────────────────
+  const queueStats = usePrinter((s) => s.queueStats)
+
+  useEffect(() => {
+    const parts: string[] = []
+    if (queueStats.printing > 0) {
+      parts.push(`${queueStats.printing} printing`)
+    }
+    if (queueStats.pending > 0) {
+      parts.push(`${queueStats.pending} pending`)
+    }
+    if (queueStats.failed > 0) {
+      parts.push(`${queueStats.failed} failed`)
+    }
+    if (queueStats.completed > 0) {
+      parts.push(`${queueStats.completed} completed`)
+    }
+
+    const status = parts.length > 0 ? parts.join(', ') : 'Idle'
+    window.api.setWindowTitle(`Smart Print \u2014 ${status}`)
+  }, [queueStats])
 
   // ── Keyboard: Ctrl+Tab / Ctrl+Shift+Tab to cycle pages ──
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

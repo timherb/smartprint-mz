@@ -88,6 +88,11 @@ interface PrinterEventDTO {
 const api = {
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
 
+  // App: set window title
+  setWindowTitle: (title: string): void => {
+    ipcRenderer.send('app:set-title', title)
+  },
+
   // Dialog
   openDirectory: (): Promise<{ canceled: boolean; path: string }> =>
     ipcRenderer.invoke('dialog:open-directory'),

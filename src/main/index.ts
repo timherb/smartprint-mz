@@ -158,6 +158,12 @@ app.whenReady().then(() => {
   // IPC handlers will be registered here as features are built
   ipcMain.handle('ping', () => 'pong')
 
+  // App: set window title from renderer
+  ipcMain.on('app:set-title', (_event, title: string) => {
+    const win = getMainWindow()
+    if (win) win.setTitle(title)
+  })
+
   // Dialog: open directory picker
   ipcMain.handle('dialog:open-directory', async () => {
     const win = BrowserWindow.getFocusedWindow()

@@ -562,6 +562,8 @@ export default function GalleryB3(): React.JSX.Element {
   const galleryStore = useGallery()
   const photos = galleryStore.photos
   const submitJob = usePrinter((s) => s.submitJob)
+  const completedCount = usePrinter((s) => s.queueStats.completed)
+  const subscribeToEvents = usePrinter((s) => s.subscribeToEvents)
   const localDirectory = useSettings((s) => s.localDirectory)
   const copies = useSettings((s) => s.copies)
 
@@ -571,6 +573,29 @@ export default function GalleryB3(): React.JSX.Element {
       galleryStore.scanPrintedFolder(localDirectory)
     }
   }, [localDirectory])
+
+  // Subscribe to printer events so queueStats stays up-to-date
+  useEffect(() => {
+    const unsubscribe = subscribeToEvents()
+    return unsubscribe
+  }, [subscribeToEvents])
+
+  // Auto-refresh gallery when new print jobs complete.
+  // Track the completed count via a ref; when it increases, trigger a
+  // delayed refresh so the file move to the "Printed Photos" subfolder
+  // has time to finish before we re-scan.
+  const prevCompletedRef = useRef(completedCount)
+  useEffect(() => {
+    if (completedCount > prevCompletedRef.current) {
+      const timer = setTimeout(() => {
+        galleryStore.refresh()
+      }, 1500)
+      prevCompletedRef.current = completedCount
+      return () => clearTimeout(timer)
+    }
+    prevCompletedRef.current = completedCount
+    return undefined
+  }, [completedCount])
 
   // Local UI state
   const [searchQuery, setSearchQuery] = useState('')

@@ -194,6 +194,7 @@ interface PrinterAPI {
 
 interface SmartPrintAPI {
   ping: () => Promise<string>
+  setWindowTitle: (title: string) => void
   openDirectory: () => Promise<{ canceled: boolean; path: string }>
   readImageAsDataUrl: (filepath: string) => Promise<string | null>
   gallery: GalleryAPI

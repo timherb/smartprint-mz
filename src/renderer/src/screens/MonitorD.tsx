@@ -6,6 +6,8 @@ import { useGallery } from '@/stores/gallery'
 import { useCloud } from '@/stores/cloud'
 import { useWatcher } from '@/stores/watcher'
 import { useSettings } from '@/stores/settings'
+import { usePressTheme } from '@/stores/pressTheme'
+import type { PressThemeColors } from '@/themes/press-themes'
 import type { Photo } from '@/stores/gallery'
 import {
   Clock,
@@ -137,64 +139,66 @@ function useAnimatedValue(target: number, duration = 900): number {
 }
 
 // ---------------------------------------------------------------------------
-// Industrial styles
+// Font constants
 // ---------------------------------------------------------------------------
-
-const metalPanel = cn(
-  'rounded-lg',
-  'bg-gradient-to-b from-[#2d3238] to-[#22262b]',
-  'shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.3)]',
-  'border border-[#3a3f46]/40',
-)
-
-const insetPanel = cn(
-  'rounded-lg',
-  'bg-[#1a1d21]',
-  'shadow-[inset_0_2px_6px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(255,255,255,0.02)]',
-  'border border-[#15171b]',
-)
-
-const paperBg = cn(
-  'rounded-lg',
-  'bg-gradient-to-br from-[#f5f0e8] to-[#ebe5d9]',
-  'shadow-[inset_0_1px_3px_rgba(0,0,0,0.08)]',
-)
-
-const brassText = 'text-[#cd853f]'
-const ledGreen = 'text-[#4ade80]'
-const ledAmber = 'text-[#f59e0b]'
-const ledRed = 'text-[#ef4444]'
-const metalText = 'text-[#c8ccd2]'
-const dimText = 'text-[#6b7280]'
 
 const monoFont = { fontFamily: '"JetBrains Mono", ui-monospace, monospace' }
 const headerFont = { fontFamily: '"Inter", system-ui, sans-serif' }
 
 // ---------------------------------------------------------------------------
+// Shadow / style builder helpers
+// ---------------------------------------------------------------------------
+
+function metalPanelStyle(c: PressThemeColors): React.CSSProperties {
+  return {
+    borderRadius: '0.5rem',
+    background: `linear-gradient(to bottom, ${c.baseLight}, ${c.baseMid})`,
+    boxShadow: `inset 0 1px 0 ${c.highlightColor}0.04), 0 2px 8px ${c.shadowColor}0.3)`,
+    border: `1px solid ${c.borderColor}`,
+  }
+}
+
+function insetPanelStyle(c: PressThemeColors): React.CSSProperties {
+  return {
+    borderRadius: '0.5rem',
+    backgroundColor: c.baseDark,
+    boxShadow: `inset 0 2px 6px ${c.shadowColor}0.5), inset 0 -1px 0 ${c.highlightColor}0.02)`,
+    border: `1px solid ${c.borderDark}`,
+  }
+}
+
+function paperBgStyle(c: PressThemeColors): React.CSSProperties {
+  return {
+    borderRadius: '0.5rem',
+    background: `linear-gradient(to bottom right, ${c.paper}, ${c.paperDark})`,
+    boxShadow: `inset 0 1px 3px ${c.shadowColor}0.08)`,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Rivet decoration
 // ---------------------------------------------------------------------------
 
-function Rivet({ className }: { className?: string }): React.JSX.Element {
+function Rivet({ className, colors }: { className?: string; colors: PressThemeColors }): React.JSX.Element {
   return (
     <span
-      className={cn(
-        'inline-block h-[5px] w-[5px] rounded-full',
-        'bg-gradient-to-br from-[#4a4f56] to-[#2a2e33]',
-        'shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_2px_rgba(0,0,0,0.4)]',
-        className,
-      )}
+      className={cn('inline-block h-[5px] w-[5px] rounded-full', className)}
+      style={{
+        background: `linear-gradient(to bottom right, ${colors.rivetLight}, ${colors.rivetDark})`,
+        boxShadow: `inset 0 1px 0 ${colors.highlightColor}0.08), 0 1px 2px ${colors.shadowColor}0.4)`,
+      }}
       aria-hidden
     />
   )
 }
 
-function PanelRivets(): React.JSX.Element {
+function PanelRivets({ colors }: { colors: PressThemeColors }): React.JSX.Element {
   return (
     <>
-      <Rivet className="absolute top-2 left-2" />
-      <Rivet className="absolute top-2 right-2" />
-      <Rivet className="absolute bottom-2 left-2" />
-      <Rivet className="absolute bottom-2 right-2" />
+      <Rivet className="absolute top-2 left-2" colors={colors} />
+      <Rivet className="absolute top-2 right-2" colors={colors} />
+      <Rivet className="absolute bottom-2 left-2" colors={colors} />
+      <Rivet className="absolute bottom-2 right-2" colors={colors} />
     </>
   )
 }
@@ -207,14 +211,16 @@ function CircularGauge({
   value,
   max,
   label,
-  color = '#cd853f',
+  color,
   size = 140,
+  colors,
 }: {
   value: number
   max: number
   label: string
-  color?: string
+  color: string
   size?: number
+  colors: PressThemeColors
 }): React.JSX.Element {
   const animated = useAnimatedValue(value)
   const radius = (size - 16) / 2
@@ -223,13 +229,13 @@ function CircularGauge({
   const dashOffset = circumference * (1 - progress)
 
   return (
-    <div className={cn(metalPanel, 'relative flex flex-col items-center p-6')}>
-      <PanelRivets />
+    <div className="relative flex flex-col items-center p-6" style={metalPanelStyle(colors)}>
+      <PanelRivets colors={colors} />
 
       {/* Section label - stencil style */}
       <p
-        className={cn('mb-3 text-[10px] font-bold uppercase tracking-[0.15em]', dimText)}
-        style={headerFont}
+        className="mb-3 text-[10px] font-bold uppercase tracking-[0.15em]"
+        style={{ ...headerFont, color: colors.textMuted }}
       >
         {label}
       </p>
@@ -243,17 +249,17 @@ function CircularGauge({
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke="#1a1d21"
+            stroke={colors.baseDark}
             strokeWidth="8"
             className="opacity-80"
           />
-          {/* Brass bezel outer ring */}
+          {/* Bezel outer ring */}
           <circle
             cx={size / 2}
             cy={size / 2}
             r={radius + 4}
             fill="none"
-            stroke="url(#brassGradient)"
+            stroke={`url(#accentGradient-${label.replace(/\s/g, '')})`}
             strokeWidth="2"
             opacity="0.5"
           />
@@ -279,15 +285,15 @@ function CircularGauge({
             cy={size / 2}
             r={radius - 6}
             fill="none"
-            stroke="#3a3f46"
+            stroke={colors.borderColor}
             strokeWidth="1"
             opacity="0.3"
           />
           <defs>
-            <linearGradient id="brassGradient" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#cd853f" />
-              <stop offset="50%" stopColor="#b87333" />
-              <stop offset="100%" stopColor="#8b5e2b" />
+            <linearGradient id={`accentGradient-${label.replace(/\s/g, '')}`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={colors.accent} />
+              <stop offset="50%" stopColor={colors.accentDark} />
+              <stop offset="100%" stopColor={colors.accentDark} />
             </linearGradient>
           </defs>
         </svg>
@@ -304,7 +310,10 @@ function CircularGauge({
           >
             {animated}
           </span>
-          <span className={cn('text-[10px] font-medium uppercase tracking-wider mt-0.5', dimText)}>
+          <span
+            className="text-[10px] font-medium uppercase tracking-wider mt-0.5"
+            style={{ color: colors.textMuted }}
+          >
             {max > 0 ? `of ${max}` : 'total'}
           </span>
         </div>
@@ -321,20 +330,20 @@ function LEDIndicator({
   status,
   label,
   detail,
+  colors,
 }: {
   status: PrinterStatus
   label: string
   detail: string | null
+  colors: PressThemeColors
 }): React.JSX.Element {
-  const color = status === 'online' ? '#4ade80' : status === 'warning' ? '#f59e0b' : '#6b7280'
-  const colorClass = status === 'online' ? ledGreen : status === 'warning' ? ledAmber : dimText
+  const color = status === 'online' ? colors.ledGreen : status === 'warning' ? colors.ledAmber : colors.textMuted
+  const colorText = status === 'online' ? colors.ledGreen : status === 'warning' ? colors.ledAmber : colors.textMuted
 
   return (
     <div
-      className={cn(
-        insetPanel,
-        'flex items-center gap-3 px-4 py-3',
-      )}
+      className="flex items-center gap-3 px-4 py-3"
+      style={insetPanelStyle(colors)}
     >
       {/* LED */}
       <div className="relative shrink-0">
@@ -346,33 +355,33 @@ function LEDIndicator({
           />
         )}
         <span
-          className={cn(
-            'relative block h-3 w-3 rounded-full',
-            'shadow-[inset_0_-1px_2px_rgba(0,0,0,0.3)]',
-          )}
+          className="relative block h-3 w-3 rounded-full"
           style={{
             background: `linear-gradient(to bottom, ${color}cc, ${color})`,
             boxShadow: status === 'online'
-              ? `inset 0 -1px 2px rgba(0,0,0,0.3), 0 0 4px ${color}40`
-              : 'inset 0 -1px 2px rgba(0,0,0,0.3)',
+              ? `inset 0 -1px 2px ${colors.shadowColor}0.3), 0 0 4px ${color}40`
+              : `inset 0 -1px 2px ${colors.shadowColor}0.3)`,
           }}
         />
       </div>
 
       {/* Label */}
       <div className="min-w-0 flex-1">
-        <p className={cn('text-xs font-semibold truncate', metalText)} style={headerFont}>
+        <p className="text-xs font-semibold truncate" style={{ ...headerFont, color: colors.textPrimary }}>
           {label}
         </p>
         {detail && (
-          <p className={cn('text-[10px] truncate mt-0.5', brassText)} style={monoFont}>
+          <p className="text-[10px] truncate mt-0.5" style={{ ...monoFont, color: colors.accent }}>
             {detail}
           </p>
         )}
       </div>
 
       {/* Status text */}
-      <span className={cn('text-[10px] font-bold uppercase tracking-wider shrink-0', colorClass)}>
+      <span
+        className="text-[10px] font-bold uppercase tracking-wider shrink-0"
+        style={{ color: colorText }}
+      >
         {status === 'online' ? 'READY' : status === 'warning' ? 'WARN' : 'OFF'}
       </span>
     </div>
@@ -387,44 +396,51 @@ function ConveyorCard({
   job,
   onCancel,
   onRetry,
+  colors,
 }: {
   job: PrintJob
   onCancel: (id: string) => void
   onRetry: (id: string) => void
+  colors: PressThemeColors
 }): React.JSX.Element {
   const isPrinting = job.status === 'printing'
   const isError = job.status === 'error'
   const isComplete = job.status === 'complete'
   const isQueued = job.status === 'queued'
 
+  const borderHighlight = isPrinting
+    ? `0 0 0 1px ${colors.accent}4d`
+    : isError
+      ? `0 0 0 1px ${colors.ledRed}4d`
+      : 'none'
+
   return (
     <div
       className={cn(
         'group relative rounded-md overflow-hidden transition-all duration-200',
-        // Paper-textured card look
-        isPrinting
-          ? 'bg-gradient-to-br from-[#f5f0e8] to-[#ebe5d9] shadow-[0_2px_8px_rgba(0,0,0,0.2),0_0_0_1px_rgba(184,115,51,0.3)]'
-          : isError
-            ? 'bg-gradient-to-br from-[#f5f0e8] to-[#ebe5d9] shadow-[0_2px_8px_rgba(0,0,0,0.2),0_0_0_1px_rgba(239,68,68,0.3)]'
-            : isComplete
-              ? 'bg-gradient-to-br from-[#eae5dd] to-[#e0dbd3] shadow-[0_1px_4px_rgba(0,0,0,0.15)] opacity-60 hover:opacity-100'
-              : 'bg-gradient-to-br from-[#f5f0e8] to-[#ebe5d9] shadow-[0_2px_6px_rgba(0,0,0,0.15)]',
+        isComplete && 'opacity-60 hover:opacity-100',
       )}
+      style={{
+        background: `linear-gradient(to bottom right, ${colors.paper}, ${colors.paperDark})`,
+        boxShadow: `0 2px 8px ${colors.shadowColor}0.2), ${borderHighlight}`,
+      }}
     >
       {/* Ink roller progress bar */}
       {(isPrinting || isError) && (
-        <div className="h-1 w-full bg-[#e0dbd3]">
+        <div className="h-1 w-full" style={{ backgroundColor: colors.paperDark }}>
           <div
             className={cn(
               'h-full transition-all duration-700 ease-out',
-              isError
-                ? 'bg-gradient-to-r from-[#ef4444] to-[#dc2626]'
-                : 'bg-gradient-to-r from-[#b87333] via-[#cd853f] to-[#b87333]',
               isPrinting && 'animate-pulse',
             )}
             style={{
               width: `${job.progress}%`,
-              boxShadow: isError ? '0 0 8px rgba(239,68,68,0.3)' : '0 0 8px rgba(184,115,51,0.3)',
+              background: isError
+                ? `linear-gradient(to right, ${colors.ledRed}, ${colors.ledRed})`
+                : `linear-gradient(to right, ${colors.accentDark}, ${colors.accent}, ${colors.accentDark})`,
+              boxShadow: isError
+                ? `0 0 8px ${colors.ledRed}4d`
+                : `0 0 8px ${colors.accentGlow}0.3)`,
             }}
           />
         </div>
@@ -433,26 +449,32 @@ function ConveyorCard({
       <div className="flex items-center gap-3 px-4 py-3">
         {/* Status icon */}
         <div
-          className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded',
-            isPrinting ? 'bg-[#b87333]/15' : isError ? 'bg-[#ef4444]/10' : isComplete ? 'bg-[#22c55e]/10' : 'bg-[#1a1a1a]/5',
-          )}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded"
+          style={{
+            backgroundColor: isPrinting
+              ? `${colors.accent}26`
+              : isError
+                ? `${colors.ledRed}1a`
+                : isComplete
+                  ? `${colors.ledGreen}1a`
+                  : `${colors.textOnPaper}0d`,
+          }}
         >
-          {isPrinting && <Loader2 className="h-4 w-4 text-[#b87333] animate-spin" />}
-          {isQueued && <FileImage className="h-4 w-4 text-[#6b7280]" />}
-          {isComplete && <CheckCircle2 className="h-4 w-4 text-[#22c55e]" />}
-          {isError && <XCircle className="h-4 w-4 text-[#ef4444]" />}
+          {isPrinting && <Loader2 className="h-4 w-4 animate-spin" style={{ color: colors.accent }} />}
+          {isQueued && <FileImage className="h-4 w-4" style={{ color: colors.textOnPaperMuted }} />}
+          {isComplete && <CheckCircle2 className="h-4 w-4" style={{ color: colors.ledGreen }} />}
+          {isError && <XCircle className="h-4 w-4" style={{ color: colors.ledRed }} />}
         </div>
 
         {/* Info */}
         <div className="min-w-0 flex-1">
           <p
-            className="text-xs font-semibold text-[#1a1a1a] truncate"
-            style={monoFont}
+            className="text-xs font-semibold truncate"
+            style={{ ...monoFont, color: colors.textOnPaper }}
           >
             {job.filename}
           </p>
-          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#6b7280]">
+          <div className="flex items-center gap-2 mt-0.5 text-[10px]" style={{ color: colors.textOnPaperMuted }}>
             {!isQueued && <span style={monoFont}>{job.printer}</span>}
             {isQueued && <span>Waiting...</span>}
             <span>&middot;</span>
@@ -470,14 +492,17 @@ function ConveyorCard({
         <div className="shrink-0">
           {isPrinting && (
             <span
-              className="text-sm font-bold text-[#b87333]"
-              style={monoFont}
+              className="text-sm font-bold"
+              style={{ ...monoFont, color: colors.accent }}
             >
               {job.progress}%
             </span>
           )}
           {isComplete && (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#22c55e]">
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: colors.ledGreen }}
+            >
               DONE
             </span>
           )}
@@ -485,7 +510,13 @@ function ConveyorCard({
             <button
               type="button"
               onClick={() => onRetry(job.id)}
-              className="flex items-center gap-1 rounded bg-[#ef4444]/10 px-2 py-1 text-[10px] font-bold text-[#ef4444] transition hover:bg-[#ef4444]/20"
+              className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold transition"
+              style={{
+                backgroundColor: `${colors.ledRed}1a`,
+                color: colors.ledRed,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${colors.ledRed}33` }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${colors.ledRed}1a` }}
             >
               <RefreshCw className="h-3 w-3" />
               RETRY
@@ -495,7 +526,16 @@ function ConveyorCard({
             <button
               type="button"
               onClick={() => onCancel(job.id)}
-              className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#6b7280] transition hover:text-[#ef4444] hover:bg-[#ef4444]/10 opacity-0 group-hover:opacity-100"
+              className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition"
+              style={{ color: colors.textOnPaperMuted }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = colors.ledRed
+                e.currentTarget.style.backgroundColor = `${colors.ledRed}1a`
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = colors.textOnPaperMuted
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }}
             >
               <Ban className="h-3 w-3" />
             </button>
@@ -512,24 +552,29 @@ function ConveyorCard({
 
 function TickerItem({
   event,
+  colors,
 }: {
   event: ActivityEvent
+  colors: PressThemeColors
 }): React.JSX.Element {
-  const iconMap: Record<ActivityEvent['type'], { icon: React.ComponentType<{ className?: string }>; color: string }> = {
-    print: { icon: CheckCircle2, color: 'text-[#22c55e]' },
-    error: { icon: XCircle, color: 'text-[#ef4444]' },
-    connect: { icon: Wifi, color: 'text-[#3b82f6]' },
-    queue: { icon: FileImage, color: 'text-[#6b7280]' },
-    warning: { icon: AlertTriangle, color: 'text-[#f59e0b]' },
+  const iconMap: Record<ActivityEvent['type'], { icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; color: string }> = {
+    print: { icon: CheckCircle2, color: colors.ledGreen },
+    error: { icon: XCircle, color: colors.ledRed },
+    connect: { icon: Wifi, color: colors.accent },
+    queue: { icon: FileImage, color: colors.textOnPaperMuted },
+    warning: { icon: AlertTriangle, color: colors.ledAmber },
   }
   const { icon: Icon, color } = iconMap[event.type]
 
   return (
-    <div className="flex items-start gap-2 px-3 py-2 border-b border-[#d4cfc5]/60 last:border-b-0">
-      <Icon className={cn('h-3 w-3 mt-0.5 shrink-0', color)} />
+    <div
+      className="flex items-start gap-2 px-3 py-2 last:border-b-0"
+      style={{ borderBottom: `1px solid ${colors.paperBorder}99` }}
+    >
+      <Icon className="h-3 w-3 mt-0.5 shrink-0" style={{ color }} />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] text-[#1a1a1a] leading-relaxed">{event.message}</p>
-        <p className="text-[10px] text-[#8b8178] mt-0.5" style={monoFont}>
+        <p className="text-[11px] leading-relaxed" style={{ color: colors.textOnPaper }}>{event.message}</p>
+        <p className="text-[10px] mt-0.5" style={{ ...monoFont, color: colors.textOnPaperMuted }}>
           {event.timestamp}
         </p>
       </div>
@@ -541,19 +586,19 @@ function TickerItem({
 // Last printed preview
 // ---------------------------------------------------------------------------
 
-function LastPrintPreview({ photo }: { photo: Photo }): React.JSX.Element {
+function LastPrintPreview({ photo, colors }: { photo: Photo; colors: PressThemeColors }): React.JSX.Element {
   return (
-    <div className={cn(metalPanel, 'relative p-4')}>
-      <PanelRivets />
+    <div className="relative p-4" style={metalPanelStyle(colors)}>
+      <PanelRivets colors={colors} />
       <p
-        className={cn('text-[10px] font-bold uppercase tracking-[0.15em] mb-3', dimText)}
-        style={headerFont}
+        className="text-[10px] font-bold uppercase tracking-[0.15em] mb-3"
+        style={{ ...headerFont, color: colors.textMuted }}
       >
         LAST PRINT
       </p>
       <div className="flex items-center gap-4">
         {/* Thumbnail on paper */}
-        <div className={cn('h-16 w-24 shrink-0 overflow-hidden', paperBg)}>
+        <div className="h-16 w-24 shrink-0 overflow-hidden" style={paperBgStyle(colors)}>
           {photo.filepath ? (
             <LocalImage
               filepath={photo.filepath}
@@ -562,15 +607,15 @@ function LastPrintPreview({ photo }: { photo: Photo }): React.JSX.Element {
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
-              <FileImage className="h-6 w-6 text-[#8b8178] opacity-40" />
+              <FileImage className="h-6 w-6 opacity-40" style={{ color: colors.textOnPaperMuted }} />
             </div>
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className={cn('text-xs font-medium truncate', metalText)} style={monoFont}>
+          <p className="text-xs font-medium truncate" style={{ ...monoFont, color: colors.textPrimary }}>
             {photo.filename}
           </p>
-          <p className={cn('mt-1 text-[10px]', dimText)}>
+          <p className="mt-1 text-[10px]" style={{ color: colors.textMuted }}>
             {new Date(photo.printedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             {photo.sizeBytes > 0 && ` \u00b7 ${(photo.sizeBytes / 1024 / 1024).toFixed(1)} MB`}
           </p>
@@ -587,6 +632,9 @@ function LastPrintPreview({ photo }: { photo: Photo }): React.JSX.Element {
 export default function MonitorD(): React.JSX.Element {
   const [isPaused, setIsPaused] = useState(false)
   const [now, setNow] = useState(new Date())
+
+  // Press theme
+  const c = usePressTheme()
 
   // --- Zustand stores ---
   const queue = usePrinter((s) => s.queue)
@@ -693,26 +741,30 @@ export default function MonitorD(): React.JSX.Element {
   const onlinePrinters = healthPrinters.filter((p) => mapPrinterStatus(p.status) === 'online').length
   const totalPrinters = pool.length || healthPrinters.length
 
+  // Themed shadows
+  const pauseBtnActiveShadow = `0 2px 6px ${c.accentGlow}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`
+
   return (
     <div className="flex h-full flex-col" style={headerFont}>
       {/* Disconnection banner */}
       {!isConnected && (
         <div
-          className={cn(
-            'flex items-center justify-center gap-2 px-4 py-3 text-sm',
-            'bg-gradient-to-r from-[#ef4444]/15 via-[#ef4444]/10 to-[#ef4444]/15',
-            'border-b border-[#ef4444]/20',
-          )}
+          className="flex items-center justify-center gap-2 px-4 py-3 text-sm"
+          style={{
+            background: `linear-gradient(to right, ${c.ledRed}26, ${c.ledRed}1a, ${c.ledRed}26)`,
+            borderBottom: `1px solid ${c.ledRed}33`,
+          }}
         >
-          <WifiOff className={cn('h-4 w-4', ledRed)} />
-          <span className={cn('font-bold', ledRed)}>CONNECTION LOST</span>
-          <span className="text-[#ef4444]/60 text-xs">Attempting to reconnect...</span>
+          <WifiOff className="h-4 w-4" style={{ color: c.ledRed }} />
+          <span className="font-bold" style={{ color: c.ledRed }}>CONNECTION LOST</span>
+          <span className="text-xs" style={{ color: `${c.ledRed}99` }}>Attempting to reconnect...</span>
           <button
             type="button"
-            className={cn(
-              'ml-3 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wider',
-              'bg-[#ef4444]/15 text-[#ef4444] transition hover:bg-[#ef4444]/25',
-            )}
+            className="ml-3 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition"
+            style={{
+              backgroundColor: `${c.ledRed}26`,
+              color: c.ledRed,
+            }}
           >
             RETRY
           </button>
@@ -727,11 +779,12 @@ export default function MonitorD(): React.JSX.Element {
           <div className="flex items-center justify-between">
             <div>
               <h2
-                className={cn('text-sm font-bold uppercase tracking-[0.15em]', metalText)}
+                className="text-sm font-bold uppercase tracking-[0.15em]"
+                style={{ color: c.textPrimary }}
               >
                 LIVE MONITOR
               </h2>
-              <p className={cn('text-[10px] mt-1 uppercase tracking-wider', dimText)}>
+              <p className="text-[10px] mt-1 uppercase tracking-wider" style={{ color: c.textMuted }}>
                 {onlinePrinters} of {totalPrinters} printers &middot; {printingCount} active, {queuedCount} queued
               </p>
             </div>
@@ -739,14 +792,16 @@ export default function MonitorD(): React.JSX.Element {
             <div className="flex items-center gap-3">
               {/* Mechanical clock */}
               <div
-                className={cn(insetPanel, 'flex items-center gap-2 px-4 py-2')}
+                className="flex items-center gap-2 px-4 py-2"
+                style={insetPanelStyle(c)}
               >
-                <Clock className={cn('h-3.5 w-3.5', brassText)} />
+                <Clock className="h-3.5 w-3.5" style={{ color: c.accent }} />
                 <span
-                  className={cn('text-xs font-bold tabular-nums', brassText)}
+                  className="text-xs font-bold tabular-nums"
                   style={{
                     ...monoFont,
-                    textShadow: '0 0 8px rgba(205,133,63,0.2)',
+                    color: c.accent,
+                    textShadow: `0 0 8px ${c.accentGlow}0.2)`,
                   }}
                 >
                   {clockStr}
@@ -757,21 +812,25 @@ export default function MonitorD(): React.JSX.Element {
               <button
                 type="button"
                 onClick={() => setIsPaused(!isPaused)}
-                className={cn(
-                  'flex items-center gap-2 rounded px-4 py-2 text-[10px] font-bold uppercase tracking-wider',
-                  'transition-all duration-200',
+                className="flex items-center gap-2 rounded px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200"
+                style={
                   isPaused
-                    ? [
-                        'bg-gradient-to-b from-[#cd853f] to-[#b87333]',
-                        'text-white',
-                        'shadow-[0_2px_6px_rgba(184,115,51,0.3),inset_0_1px_0_rgba(255,255,255,0.15)]',
-                      ]
-                    : [
-                        metalPanel,
-                        metalText,
-                        'hover:text-white',
-                      ],
-                )}
+                    ? {
+                        background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
+                        color: '#ffffff',
+                        boxShadow: pauseBtnActiveShadow,
+                      }
+                    : {
+                        ...metalPanelStyle(c),
+                        color: c.textPrimary,
+                      }
+                }
+                onMouseEnter={(e) => {
+                  if (!isPaused) e.currentTarget.style.color = '#ffffff'
+                }}
+                onMouseLeave={(e) => {
+                  if (!isPaused) e.currentTarget.style.color = c.textPrimary
+                }}
               >
                 {isPaused ? (
                   <>
@@ -794,36 +853,45 @@ export default function MonitorD(): React.JSX.Element {
               value={completedCount}
               max={totalCount || completedCount}
               label="PHOTOS PRINTED"
-              color="#cd853f"
+              color={c.accent}
+              colors={c}
             />
             <CircularGauge
               value={queueDepth}
               max={Math.max(queueDepth, 10)}
               label="QUEUE DEPTH"
-              color="#4ade80"
+              color={c.ledGreen}
+              colors={c}
             />
           </div>
 
           {/* ---- Stats strip ---- */}
-          <div className={cn(insetPanel, 'flex items-center justify-around py-3')}>
+          <div
+            className="flex items-center justify-around py-3"
+            style={insetPanelStyle(c)}
+          >
             {[
-              { label: 'TOTAL', value: totalCount, color: metalText },
-              { label: 'PRINTING', value: printingCount, color: brassText },
-              { label: 'QUEUED', value: queuedCount, color: dimText },
-              { label: 'COMPLETE', value: completedCount, color: ledGreen },
-              { label: 'FAILED', value: failedCount, color: ledRed },
+              { label: 'TOTAL', value: totalCount, color: c.textPrimary, isAccent: false },
+              { label: 'PRINTING', value: printingCount, color: c.accent, isAccent: true },
+              { label: 'QUEUED', value: queuedCount, color: c.textMuted, isAccent: false },
+              { label: 'COMPLETE', value: completedCount, color: c.ledGreen, isAccent: false },
+              { label: 'FAILED', value: failedCount, color: c.ledRed, isAccent: false },
             ].map((stat) => (
               <div key={stat.label} className="flex flex-col items-center gap-1">
                 <span
-                  className={cn('text-lg font-bold tabular-nums', stat.color)}
+                  className="text-lg font-bold tabular-nums"
                   style={{
                     ...monoFont,
-                    textShadow: stat.color === brassText ? '0 0 8px rgba(205,133,63,0.2)' : undefined,
+                    color: stat.color,
+                    textShadow: stat.isAccent ? `0 0 8px ${c.accentGlow}0.2)` : undefined,
                   }}
                 >
                   {stat.value}
                 </span>
-                <span className={cn('text-[9px] font-bold uppercase tracking-[0.12em]', dimText)}>
+                <span
+                  className="text-[9px] font-bold uppercase tracking-[0.12em]"
+                  style={{ color: c.textMuted }}
+                >
                   {stat.label}
                 </span>
               </div>
@@ -831,7 +899,7 @@ export default function MonitorD(): React.JSX.Element {
           </div>
 
           {/* ---- Last print preview ---- */}
-          {lastPhoto && <LastPrintPreview photo={lastPhoto} />}
+          {lastPhoto && <LastPrintPreview photo={lastPhoto} colors={c} />}
 
           {/* ---- Main grid: Queue (left) + Sidebar (right) ---- */}
           <div className="grid grid-cols-[1fr_320px] gap-5">
@@ -841,23 +909,26 @@ export default function MonitorD(): React.JSX.Element {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <h3
-                    className={cn('text-[11px] font-bold uppercase tracking-[0.12em]', metalText)}
-                    style={headerFont}
+                    className="text-[11px] font-bold uppercase tracking-[0.12em]"
+                    style={{ ...headerFont, color: c.textPrimary }}
                   >
                     PRINT QUEUE
                   </h3>
                   <span
-                    className={cn(
-                      'rounded px-2 py-0.5 text-[10px] font-bold tabular-nums',
-                      insetPanel,
-                      brassText,
-                    )}
-                    style={monoFont}
+                    className="rounded px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                    style={{
+                      ...insetPanelStyle(c),
+                      ...monoFont,
+                      color: c.accent,
+                    }}
                   >
                     {mappedJobs.length}
                   </span>
                 </div>
-                <span className={cn('text-[10px] font-bold uppercase tracking-wider', dimText)}>
+                <span
+                  className="text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: c.textMuted }}
+                >
                   PAPER FEED
                 </span>
               </div>
@@ -865,13 +936,13 @@ export default function MonitorD(): React.JSX.Element {
               <div className="space-y-2">
                 {mappedJobs.length > 0 ? (
                   mappedJobs.map((job) => (
-                    <ConveyorCard key={job.id} job={job} onCancel={handleCancel} onRetry={handleRetry} />
+                    <ConveyorCard key={job.id} job={job} onCancel={handleCancel} onRetry={handleRetry} colors={c} />
                   ))
                 ) : (
-                  <div className={cn(insetPanel, 'p-8 text-center')}>
-                    <FileImage className={cn('h-8 w-8 mx-auto mb-3 opacity-30', dimText)} />
-                    <p className={cn('text-xs font-medium', dimText)}>No jobs in the queue</p>
-                    <p className={cn('text-[10px] mt-1', dimText)}>
+                  <div className="p-8 text-center" style={insetPanelStyle(c)}>
+                    <FileImage className="h-8 w-8 mx-auto mb-3 opacity-30" style={{ color: c.textMuted }} />
+                    <p className="text-xs font-medium" style={{ color: c.textMuted }}>No jobs in the queue</p>
+                    <p className="text-[10px] mt-1" style={{ color: c.textMuted }}>
                       Jobs appear here when photos are submitted for printing
                     </p>
                   </div>
@@ -886,21 +957,21 @@ export default function MonitorD(): React.JSX.Element {
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h3
-                    className={cn('text-[11px] font-bold uppercase tracking-[0.12em]', metalText)}
-                    style={headerFont}
+                    className="text-[11px] font-bold uppercase tracking-[0.12em]"
+                    style={{ ...headerFont, color: c.textPrimary }}
                   >
                     PRINTERS
                   </h3>
                   <span
-                    className={cn('text-[10px] font-bold tabular-nums', brassText)}
-                    style={monoFont}
+                    className="text-[10px] font-bold tabular-nums"
+                    style={{ ...monoFont, color: c.accent }}
                   >
                     {onlinePrinters}/{totalPrinters}
                   </span>
                 </div>
 
-                <div className={cn(metalPanel, 'relative p-3 space-y-2')}>
-                  <PanelRivets />
+                <div className="relative p-3 space-y-2" style={metalPanelStyle(c)}>
+                  <PanelRivets colors={c} />
                   {mappedPrinters.length > 0 ? (
                     mappedPrinters.map((printer) => (
                       <LEDIndicator
@@ -908,12 +979,13 @@ export default function MonitorD(): React.JSX.Element {
                         status={printer.status}
                         label={printer.name}
                         detail={printer.currentJob}
+                        colors={c}
                       />
                     ))
                   ) : (
-                    <div className={cn(insetPanel, 'p-6 text-center')}>
-                      <Printer className={cn('h-6 w-6 mx-auto mb-2 opacity-30', dimText)} />
-                      <p className={cn('text-[10px]', dimText)}>No printers detected</p>
+                    <div className="p-6 text-center" style={insetPanelStyle(c)}>
+                      <Printer className="h-6 w-6 mx-auto mb-2 opacity-30" style={{ color: c.textMuted }} />
+                      <p className="text-[10px]" style={{ color: c.textMuted }}>No printers detected</p>
                     </div>
                   )}
                 </div>
@@ -923,25 +995,28 @@ export default function MonitorD(): React.JSX.Element {
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h3
-                    className={cn('text-[11px] font-bold uppercase tracking-[0.12em]', metalText)}
-                    style={headerFont}
+                    className="text-[11px] font-bold uppercase tracking-[0.12em]"
+                    style={{ ...headerFont, color: c.textPrimary }}
                   >
                     PRINT LOG
                   </h3>
-                  <span className={cn('text-[10px] font-bold uppercase tracking-wider', dimText)}>
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wider"
+                    style={{ color: c.textMuted }}
+                  >
                     LATEST
                   </span>
                 </div>
 
-                <div className={cn(paperBg, 'max-h-[360px] overflow-y-auto')}>
+                <div className="max-h-[360px] overflow-y-auto" style={paperBgStyle(c)}>
                   {activityEvents.length > 0 ? (
                     activityEvents.map((event) => (
-                      <TickerItem key={event.id} event={event} />
+                      <TickerItem key={event.id} event={event} colors={c} />
                     ))
                   ) : (
                     <div className="px-4 py-8 text-center">
-                      <p className="text-[10px] text-[#8b8178]">No activity yet</p>
-                      <p className="text-[10px] text-[#8b8178] mt-1 opacity-60">
+                      <p className="text-[10px]" style={{ color: c.textOnPaperMuted }}>No activity yet</p>
+                      <p className="text-[10px] mt-1 opacity-60" style={{ color: c.textOnPaperMuted }}>
                         Events appear as photos are processed
                       </p>
                     </div>

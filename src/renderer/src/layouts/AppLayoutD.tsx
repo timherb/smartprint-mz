@@ -5,6 +5,13 @@ import { useSettings } from '@/stores/settings'
 import { useCloud } from '@/stores/cloud'
 import { usePrinter } from '@/stores/printer'
 import { useWatcher } from '@/stores/watcher'
+import { usePressTheme, usePressThemeStore } from '@/stores/pressTheme'
+import {
+  PRESS_THEME_NAMES,
+  PRESS_THEME_LABELS,
+  PRESS_THEME_SWATCHES,
+} from '@/themes/press-themes'
+import type { PressThemeColors } from '@/themes/press-themes'
 import {
   Settings,
   Activity,
@@ -35,15 +42,14 @@ const navItems: NavItem[] = [
 // Rivet decorations
 // ---------------------------------------------------------------------------
 
-function Rivet({ className }: { className?: string }): React.JSX.Element {
+function Rivet({ className, colors }: { className?: string; colors: PressThemeColors }): React.JSX.Element {
   return (
     <span
-      className={cn(
-        'inline-block h-[6px] w-[6px] rounded-full',
-        'bg-gradient-to-br from-[#4a4f56] to-[#2a2e33]',
-        'shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_2px_rgba(0,0,0,0.4)]',
-        className,
-      )}
+      className={cn('inline-block h-[6px] w-[6px] rounded-full', className)}
+      style={{
+        background: `linear-gradient(to bottom right, ${colors.rivetLight}, ${colors.rivetDark})`,
+        boxShadow: `inset 0 1px 0 ${colors.highlightColor}0.08), 0 1px 2px ${colors.shadowColor}0.4)`,
+      }}
       aria-hidden
     />
   )
@@ -53,13 +59,15 @@ function Rivet({ className }: { className?: string }): React.JSX.Element {
 // Metal noise texture background (CSS gradient trick)
 // ---------------------------------------------------------------------------
 
-const metalBg = {
-  backgroundImage: `
-    radial-gradient(ellipse at 20% 50%, rgba(58,63,70,0.4) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 50%, rgba(58,63,70,0.3) 0%, transparent 50%),
-    radial-gradient(circle at 50% 0%, rgba(58,63,70,0.15) 0%, transparent 70%),
-    linear-gradient(180deg, #22262b 0%, #1a1d21 100%)
-  `,
+function makeMetalBg(c: PressThemeColors): React.CSSProperties {
+  return {
+    backgroundImage: `
+      radial-gradient(ellipse at 20% 50%, ${c.metalSpotColor}0.4) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 50%, ${c.metalSpotColor}0.3) 0%, transparent 50%),
+      radial-gradient(circle at 50% 0%, ${c.metalSpotColor}0.15) 0%, transparent 70%),
+      linear-gradient(180deg, ${c.baseMid} 0%, ${c.baseDark} 100%)
+    `,
+  }
 }
 
 const metalNoise = {
@@ -97,6 +105,48 @@ function PageContent({ page }: { page: Page }): React.JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
+// Theme picker swatches (small row in nav bar)
+// ---------------------------------------------------------------------------
+
+function ThemePicker({ colors }: { colors: PressThemeColors }): React.JSX.Element {
+  const currentTheme = usePressThemeStore((s) => s.theme)
+  const setTheme = usePressThemeStore((s) => s.setTheme)
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {PRESS_THEME_NAMES.map((name) => {
+        const swatch = PRESS_THEME_SWATCHES[name]
+        const isActive = currentTheme === name
+        return (
+          <button
+            key={name}
+            type="button"
+            onClick={() => setTheme(name)}
+            title={PRESS_THEME_LABELS[name]}
+            className={cn(
+              'relative flex h-5 w-5 items-center justify-center rounded-full',
+              'transition-all duration-200',
+              isActive && 'ring-2 ring-offset-1',
+            )}
+            style={{
+              background: `linear-gradient(135deg, ${swatch.base} 50%, ${swatch.accent} 50%)`,
+              ...(isActive
+                ? {
+                    outline: `2px solid ${colors.accent}`,
+                    outlineOffset: '1px',
+                  }
+                : {}),
+            }}
+            aria-label={`Switch to ${PRESS_THEME_LABELS[name]} theme`}
+            aria-pressed={isActive}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main layout
 // ---------------------------------------------------------------------------
 
@@ -107,6 +157,9 @@ export default function AppLayoutD(): React.JSX.Element {
   const isConnected = useCloud((s) => s.connected)
   const mode = useSettings((s) => s.mode)
   useTheme() // subscribe to theme changes
+
+  // Press theme
+  const c = usePressTheme()
 
   // Window title: live queue status
   const queueStats = usePrinter((s) => s.queueStats)
@@ -161,11 +214,18 @@ export default function AppLayoutD(): React.JSX.Element {
     }
   }, [])
 
+  // Shadow helpers for this theme
+  const headerShadow = `0 2px 8px ${c.shadowColor}0.4), inset 0 1px 0 ${c.highlightColor}0.04)`
+  const insetNavShadow = `inset 0 2px 4px ${c.shadowColor}0.5), inset 0 -1px 0 ${c.highlightColor}0.03)`
+  const activeTabShadow = `0 1px 3px ${c.shadowColor}0.3), inset 0 1px 0 ${c.highlightColor}0.06)`
+  const modeBadgeShadow = `inset 0 1px 3px ${c.shadowColor}0.4), inset 0 -1px 0 ${c.highlightColor}0.03)`
+  const brandIconShadow = `0 2px 4px ${c.shadowColor}0.4), inset 0 1px 0 ${c.highlightColor}0.2)`
+
   return (
     <div
       className="flex h-screen w-screen flex-col"
       style={{
-        ...metalBg,
+        ...makeMetalBg(c),
         fontFamily: '"Inter", "DM Sans", system-ui, sans-serif',
       }}
     >
@@ -178,25 +238,25 @@ export default function AppLayoutD(): React.JSX.Element {
 
       {/* ---- Industrial riveted navigation header ---- */}
       <header
-        className={cn(
-          'relative z-10 shrink-0',
-          'border-b border-[#3a3f46]/60',
-          'bg-gradient-to-b from-[#2d3238] to-[#22262b]',
-          'shadow-[0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.04)]',
-        )}
+        className="relative z-10 shrink-0"
+        style={{
+          borderBottom: `1px solid ${c.borderColor}`,
+          background: `linear-gradient(to bottom, ${c.baseLight}, ${c.baseMid})`,
+          boxShadow: headerShadow,
+        }}
       >
         <div className="flex h-14 items-center px-6">
           {/* Rivets left */}
-          <Rivet className="mr-3" />
+          <Rivet className="mr-3" colors={c} />
 
-          {/* App brand - brass printing press icon */}
+          {/* App brand - accent printing press icon */}
           <div className="flex items-center gap-3 mr-8">
             <div
-              className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-md',
-                'bg-gradient-to-br from-[#cd853f] to-[#8b5e2b]',
-                'shadow-[0_2px_4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.2)]',
-              )}
+              className="flex h-8 w-8 items-center justify-center rounded-md"
+              style={{
+                background: `linear-gradient(to bottom right, ${c.accent}, ${c.accentDark})`,
+                boxShadow: brandIconShadow,
+              }}
             >
               {/* Gear/press icon via SVG */}
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-white">
@@ -207,8 +267,8 @@ export default function AppLayoutD(): React.JSX.Element {
               </svg>
             </div>
             <span
-              className="text-sm font-bold uppercase tracking-[0.15em] text-[#c8ccd2]"
-              style={{ fontFamily: '"Inter", system-ui, sans-serif' }}
+              className="text-sm font-bold uppercase tracking-[0.15em]"
+              style={{ fontFamily: '"Inter", system-ui, sans-serif', color: c.textPrimary }}
             >
               Smart Print
             </span>
@@ -216,13 +276,11 @@ export default function AppLayoutD(): React.JSX.Element {
 
           {/* Riveted metal tab bar */}
           <nav
-            className={cn(
-              'flex items-center gap-0.5',
-              'rounded-md',
-              'bg-[#1a1d21]',
-              'shadow-[inset_0_2px_4px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(255,255,255,0.03)]',
-              'p-1',
-            )}
+            className="flex items-center gap-0.5 rounded-md p-1"
+            style={{
+              backgroundColor: c.baseDark,
+              boxShadow: insetNavShadow,
+            }}
             role="navigation"
             aria-label="Main navigation"
           >
@@ -238,26 +296,41 @@ export default function AppLayoutD(): React.JSX.Element {
                   className={cn(
                     'relative flex items-center gap-2 rounded px-4 py-1.5 text-xs font-bold tracking-[0.1em]',
                     'transition-all duration-200',
-                    isActive
-                      ? [
-                          'bg-gradient-to-b from-[#3a3f46] to-[#2d3238]',
-                          'text-[#cd853f]',
-                          'shadow-[0_1px_3px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)]',
-                        ]
-                      : [
-                          'text-[#6b7280]',
-                          'hover:text-[#c8ccd2]',
-                          'hover:bg-[#22262b]',
-                        ],
                   )}
+                  style={
+                    isActive
+                      ? {
+                          background: `linear-gradient(to bottom, ${c.navTabActiveFrom}, ${c.navTabActiveTo})`,
+                          color: c.accent,
+                          boxShadow: activeTabShadow,
+                        }
+                      : {
+                          color: c.textMuted,
+                        }
+                  }
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = c.textPrimary
+                      e.currentTarget.style.backgroundColor = c.baseMid
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = c.textMuted
+                      e.currentTarget.style.backgroundColor = 'transparent'
+                    }
+                  }}
                   aria-current={isActive ? 'page' : undefined}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {item.label}
-                  {/* Active indicator - brass line under tab */}
+                  {/* Active indicator - accent line under tab */}
                   {isActive && (
                     <span
-                      className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-transparent via-[#cd853f] to-transparent"
+                      className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full"
+                      style={{
+                        background: `linear-gradient(to right, transparent, ${c.accent}, transparent)`,
+                      }}
                       aria-hidden
                     />
                   )}
@@ -269,16 +342,25 @@ export default function AppLayoutD(): React.JSX.Element {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Right side: mode badge + connection LED */}
+          {/* Right side: theme picker + mode badge + connection LED */}
           <div className="flex items-center gap-4">
+            {/* Theme picker */}
+            <ThemePicker colors={c} />
+
+            {/* Divider */}
+            <div
+              className="h-5 w-px"
+              style={{ backgroundColor: c.borderColor }}
+            />
+
             {/* Source mode badge - embossed metal label */}
             <div
-              className={cn(
-                'flex items-center gap-2 rounded px-3 py-1.5',
-                'bg-[#1a1d21]',
-                'shadow-[inset_0_1px_3px_rgba(0,0,0,0.4),inset_0_-1px_0_rgba(255,255,255,0.03)]',
-                'text-xs font-bold uppercase tracking-[0.08em] text-[#6b7280]',
-              )}
+              className="flex items-center gap-2 rounded px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em]"
+              style={{
+                backgroundColor: c.baseDark,
+                boxShadow: modeBadgeShadow,
+                color: c.textMuted,
+              }}
             >
               {mode === 'local' ? (
                 <HardDrive className="h-3 w-3" />
@@ -294,31 +376,32 @@ export default function AppLayoutD(): React.JSX.Element {
                 {/* LED glow */}
                 {isConnected && (
                   <span
-                    className="absolute inset-0 rounded-full bg-[#4ade80] blur-[4px] opacity-40"
+                    className="absolute inset-0 rounded-full blur-[4px] opacity-40"
+                    style={{ backgroundColor: c.ledGreen }}
                     aria-hidden
                   />
                 )}
                 {/* LED body */}
                 <span
-                  className={cn(
-                    'relative block h-3 w-3 rounded-full',
-                    'shadow-[inset_0_-1px_2px_rgba(0,0,0,0.3),0_0_1px_rgba(0,0,0,0.5)]',
-                    isConnected
-                      ? 'bg-gradient-to-b from-[#86efac] to-[#22c55e]'
-                      : 'bg-gradient-to-b from-[#6b7280] to-[#4b5563]',
-                  )}
+                  className="relative block h-3 w-3 rounded-full"
+                  style={{
+                    background: isConnected
+                      ? `linear-gradient(to bottom, ${c.ledGreen}cc, ${c.ledGreen})`
+                      : `linear-gradient(to bottom, ${c.textMuted}, ${c.rivetDark})`,
+                    boxShadow: `inset 0 -1px 2px ${c.shadowColor}0.3), 0 0 1px ${c.shadowColor}0.5)`,
+                  }}
                 />
               </div>
-              <span className={cn(
-                'text-[10px] font-bold uppercase tracking-[0.08em]',
-                isConnected ? 'text-[#4ade80]' : 'text-[#6b7280]',
-              )}>
+              <span
+                className="text-[10px] font-bold uppercase tracking-[0.08em]"
+                style={{ color: isConnected ? c.ledGreen : c.textMuted }}
+              >
                 {isConnected ? 'ONLINE' : 'OFFLINE'}
               </span>
             </div>
 
             {/* Rivet right */}
-            <Rivet />
+            <Rivet colors={c} />
           </div>
         </div>
       </header>

@@ -6,6 +6,13 @@ import { usePrinter } from '@/stores/printer'
 import type { PrinterInfoDTO } from '@/stores/printer'
 import { useCloud } from '@/stores/cloud'
 import { useWatcher } from '@/stores/watcher'
+import { usePressTheme, usePressThemeStore } from '@/stores/pressTheme'
+import {
+  PRESS_THEME_NAMES,
+  PRESS_THEME_LABELS,
+  PRESS_THEME_SWATCHES,
+} from '@/themes/press-themes'
+import type { PressThemeColors } from '@/themes/press-themes'
 import {
   FolderOpen,
   Cloud,
@@ -28,6 +35,7 @@ import {
   Gauge,
   Loader2,
   Copy,
+  Palette,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -72,58 +80,58 @@ const PAPER_SIZES: { value: PaperSize; label: string }[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// Industrial styles
+// Font constants
 // ---------------------------------------------------------------------------
-
-const metalPanel = cn(
-  'rounded-lg',
-  'bg-gradient-to-b from-[#2d3238] to-[#22262b]',
-  'shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.3)]',
-  'border border-[#3a3f46]/40',
-)
-
-const insetPanel = cn(
-  'rounded-lg',
-  'bg-[#1a1d21]',
-  'shadow-[inset_0_2px_6px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(255,255,255,0.02)]',
-  'border border-[#15171b]',
-)
-
-const brassText = 'text-[#cd853f]'
-const metalText = 'text-[#c8ccd2]'
-const dimText = 'text-[#6b7280]'
-const ledGreen = 'text-[#4ade80]'
-const ledAmber = 'text-[#f59e0b]'
-const ledRed = 'text-[#ef4444]'
 
 const monoFont = { fontFamily: '"JetBrains Mono", ui-monospace, monospace' }
 const headerFont = { fontFamily: '"Inter", system-ui, sans-serif' }
 
 // ---------------------------------------------------------------------------
+// Style builders
+// ---------------------------------------------------------------------------
+
+function metalPanelStyle(c: PressThemeColors): React.CSSProperties {
+  return {
+    borderRadius: '0.5rem',
+    background: `linear-gradient(to bottom, ${c.baseLight}, ${c.baseMid})`,
+    boxShadow: `inset 0 1px 0 ${c.highlightColor}0.04), 0 2px 8px ${c.shadowColor}0.3)`,
+    border: `1px solid ${c.borderColor}`,
+  }
+}
+
+function insetPanelStyle(c: PressThemeColors): React.CSSProperties {
+  return {
+    borderRadius: '0.5rem',
+    backgroundColor: c.baseDark,
+    boxShadow: `inset 0 2px 6px ${c.shadowColor}0.5), inset 0 -1px 0 ${c.highlightColor}0.02)`,
+    border: `1px solid ${c.borderDark}`,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Rivet decoration
 // ---------------------------------------------------------------------------
 
-function Rivet({ className }: { className?: string }): React.JSX.Element {
+function Rivet({ className, colors }: { className?: string; colors: PressThemeColors }): React.JSX.Element {
   return (
     <span
-      className={cn(
-        'inline-block h-[5px] w-[5px] rounded-full',
-        'bg-gradient-to-br from-[#4a4f56] to-[#2a2e33]',
-        'shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_2px_rgba(0,0,0,0.4)]',
-        className,
-      )}
+      className={cn('inline-block h-[5px] w-[5px] rounded-full', className)}
+      style={{
+        background: `linear-gradient(to bottom right, ${colors.rivetLight}, ${colors.rivetDark})`,
+        boxShadow: `inset 0 1px 0 ${colors.highlightColor}0.08), 0 1px 2px ${colors.shadowColor}0.4)`,
+      }}
       aria-hidden
     />
   )
 }
 
-function PanelRivets(): React.JSX.Element {
+function PanelRivets({ colors }: { colors: PressThemeColors }): React.JSX.Element {
   return (
     <>
-      <Rivet className="absolute top-2 left-2" />
-      <Rivet className="absolute top-2 right-2" />
-      <Rivet className="absolute bottom-2 left-2" />
-      <Rivet className="absolute bottom-2 right-2" />
+      <Rivet className="absolute top-2 left-2" colors={colors} />
+      <Rivet className="absolute top-2 right-2" colors={colors} />
+      <Rivet className="absolute bottom-2 left-2" colors={colors} />
+      <Rivet className="absolute bottom-2 right-2" colors={colors} />
     </>
   )
 }
@@ -136,31 +144,33 @@ function SectionHeader({
   icon: Icon,
   title,
   description,
+  colors,
 }: {
   icon: React.ComponentType<{ className?: string }>
   title: string
   description: string
+  colors: PressThemeColors
 }): React.JSX.Element {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-3">
         <div
-          className={cn(
-            'flex h-8 w-8 items-center justify-center rounded',
-            'bg-gradient-to-br from-[#cd853f] to-[#8b5e2b]',
-            'shadow-[0_2px_4px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)]',
-          )}
+          className="flex h-8 w-8 items-center justify-center rounded"
+          style={{
+            background: `linear-gradient(to bottom right, ${colors.accent}, ${colors.accentDark})`,
+            boxShadow: `0 2px 4px ${colors.shadowColor}0.3), inset 0 1px 0 ${colors.highlightColor}0.15)`,
+          }}
         >
           <Icon className="h-4 w-4 text-white" />
         </div>
         <h2
-          className={cn('text-xs font-bold uppercase tracking-[0.15em]', metalText)}
-          style={headerFont}
+          className="text-xs font-bold uppercase tracking-[0.15em]"
+          style={{ ...headerFont, color: colors.textPrimary }}
         >
           {title}
         </h2>
       </div>
-      <p className={cn('mt-2 pl-11 text-xs leading-relaxed', dimText)}>
+      <p className="mt-2 pl-11 text-xs leading-relaxed" style={{ color: colors.textMuted }}>
         {description}
       </p>
     </div>
@@ -174,23 +184,25 @@ function SectionHeader({
 function FieldLabel({
   children,
   htmlFor,
+  colors,
 }: {
   children: React.ReactNode
   htmlFor?: string
+  colors: PressThemeColors
 }): React.JSX.Element {
   return (
     <label
       htmlFor={htmlFor}
-      className={cn('mb-2 block text-[10px] font-bold uppercase tracking-[0.1em]', metalText)}
-      style={headerFont}
+      className="mb-2 block text-[10px] font-bold uppercase tracking-[0.1em]"
+      style={{ ...headerFont, color: colors.textPrimary }}
     >
       {children}
     </label>
   )
 }
 
-function FieldHint({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <p className={cn('mt-2 text-[10px] leading-relaxed', dimText)}>{children}</p>
+function FieldHint({ children, colors }: { children: React.ReactNode; colors: PressThemeColors }): React.JSX.Element {
+  return <p className="mt-2 text-[10px] leading-relaxed" style={{ color: colors.textMuted }}>{children}</p>
 }
 
 // ---------------------------------------------------------------------------
@@ -200,9 +212,11 @@ function FieldHint({ children }: { children: React.ReactNode }): React.JSX.Eleme
 function RockerSwitch({
   checked,
   onChange,
+  colors,
 }: {
   checked: boolean
   onChange: (v: boolean) => void
+  colors: PressThemeColors
 }): React.JSX.Element {
   return (
     <button
@@ -210,48 +224,47 @@ function RockerSwitch({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={cn(
-        'relative inline-flex h-7 w-14 shrink-0 items-center rounded',
-        'transition-all duration-200',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cd853f]/50',
+      className="relative inline-flex h-7 w-14 shrink-0 items-center rounded transition-all duration-200 focus-visible:outline-none"
+      style={
         checked
-          ? 'bg-gradient-to-b from-[#cd853f] to-[#b87333] shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_2px_4px_rgba(0,0,0,0.3)]'
-          : 'bg-[#1a1d21] shadow-[inset_0_2px_6px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(255,255,255,0.02)] border border-[#15171b]',
-      )}
+          ? {
+              background: `linear-gradient(to bottom, ${colors.accent}, ${colors.accentDark})`,
+              boxShadow: `inset 0 1px 0 ${colors.highlightColor}0.15), 0 2px 4px ${colors.shadowColor}0.3)`,
+            }
+          : {
+              ...insetPanelStyle(colors),
+            }
+      }
     >
       {/* Track labels */}
       <span
-        className={cn(
-          'absolute left-2 text-[8px] font-bold uppercase tracking-wider',
-          checked ? 'text-white/70' : 'text-transparent',
-        )}
+        className="absolute left-2 text-[8px] font-bold uppercase tracking-wider"
+        style={{ color: checked ? 'rgba(255,255,255,0.7)' : 'transparent' }}
       >
         ON
       </span>
       <span
-        className={cn(
-          'absolute right-1.5 text-[8px] font-bold uppercase tracking-wider',
-          checked ? 'text-transparent' : 'text-[#4b5563]',
-        )}
+        className="absolute right-1.5 text-[8px] font-bold uppercase tracking-wider"
+        style={{ color: checked ? 'transparent' : colors.textMuted }}
       >
         OFF
       </span>
       {/* Knob */}
       <span
-        className={cn(
-          'inline-block h-5 w-5 rounded-sm',
-          'transition-transform duration-200',
-          'shadow-[0_2px_4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)]',
-          checked
-            ? 'translate-x-[33px] bg-gradient-to-b from-[#e8d5b8] to-[#c8b090]'
-            : 'translate-x-[3px] bg-gradient-to-b from-[#4a4f56] to-[#3a3f46]',
-        )}
+        className="inline-block h-5 w-5 rounded-sm transition-transform duration-200"
+        style={{
+          transform: checked ? 'translateX(33px)' : 'translateX(3px)',
+          background: checked
+            ? `linear-gradient(to bottom, ${colors.knobOnFrom}, ${colors.knobOnTo})`
+            : `linear-gradient(to bottom, ${colors.knobOffFrom}, ${colors.knobOffTo})`,
+          boxShadow: `0 2px 4px ${colors.shadowColor}0.4), inset 0 1px 0 ${colors.highlightColor}0.1)`,
+        }}
       >
         {/* Grip lines on knob */}
         <span className="absolute inset-x-1.5 top-[7px] flex flex-col gap-[2px]">
-          <span className={cn('h-px rounded-full', checked ? 'bg-[#8b5e2b]/40' : 'bg-[#2a2e33]/60')} />
-          <span className={cn('h-px rounded-full', checked ? 'bg-[#8b5e2b]/40' : 'bg-[#2a2e33]/60')} />
-          <span className={cn('h-px rounded-full', checked ? 'bg-[#8b5e2b]/40' : 'bg-[#2a2e33]/60')} />
+          <span className="h-px rounded-full" style={{ backgroundColor: checked ? colors.knobGripOn : colors.knobGripOff }} />
+          <span className="h-px rounded-full" style={{ backgroundColor: checked ? colors.knobGripOn : colors.knobGripOff }} />
+          <span className="h-px rounded-full" style={{ backgroundColor: checked ? colors.knobGripOn : colors.knobGripOff }} />
         </span>
       </span>
     </button>
@@ -267,25 +280,25 @@ function MetalSelect({
   onChange,
   options,
   className,
+  colors,
 }: {
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
   className?: string
+  colors: PressThemeColors
 }): React.JSX.Element {
   return (
     <div className={cn('relative', className)}>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          'h-9 w-full appearance-none rounded px-3 pr-8 text-xs',
-          insetPanel,
-          metalText,
-          'outline-none transition-all duration-200',
-          'focus:ring-1 focus:ring-[#cd853f]/30',
-        )}
-        style={monoFont}
+        className="h-9 w-full appearance-none rounded px-3 pr-8 text-xs outline-none transition-all duration-200"
+        style={{
+          ...insetPanelStyle(colors),
+          ...monoFont,
+          color: colors.textPrimary,
+        }}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -294,9 +307,10 @@ function MetalSelect({
         ))}
       </select>
       <svg
-        className={cn('pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2', dimText)}
+        className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2"
         viewBox="0 0 12 12"
         fill="none"
+        style={{ color: colors.textMuted }}
       >
         <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
@@ -315,6 +329,7 @@ function MetalStepper({
   max,
   unit,
   id,
+  colors,
 }: {
   value: number
   onChange: (v: number) => void
@@ -322,21 +337,18 @@ function MetalStepper({
   max: number
   unit: string
   id?: string
+  colors: PressThemeColors
 }): React.JSX.Element {
-  const clamp = (n: number) => Math.min(max, Math.max(min, n))
+  const clamp = (n: number): number => Math.min(max, Math.max(min, n))
   return (
     <div className="flex items-center gap-3">
-      <div className={cn('flex items-center overflow-hidden rounded', insetPanel)}>
+      <div className="flex items-center overflow-hidden rounded" style={insetPanelStyle(colors)}>
         <button
           type="button"
           onClick={() => onChange(clamp(value - 1))}
           disabled={value <= min}
-          className={cn(
-            'flex h-9 w-8 items-center justify-center text-sm font-bold',
-            metalText,
-            'transition hover:text-[#cd853f] disabled:opacity-30',
-            'border-r border-[#15171b]',
-          )}
+          className="flex h-9 w-8 items-center justify-center text-sm font-bold transition disabled:opacity-30"
+          style={{ color: colors.textPrimary, borderRight: `1px solid ${colors.borderDark}` }}
           aria-label="Decrease"
         >
           -
@@ -350,13 +362,11 @@ function MetalStepper({
             const n = parseInt(e.target.value, 10)
             if (!isNaN(n)) onChange(clamp(n))
           }}
-          className={cn(
-            'h-9 w-11 bg-transparent text-center text-xs outline-none',
-            brassText,
-          )}
+          className="h-9 w-11 bg-transparent text-center text-xs outline-none"
           style={{
             ...monoFont,
-            textShadow: '0 0 8px rgba(205,133,63,0.2)',
+            color: colors.accent,
+            textShadow: `0 0 8px ${colors.accentGlow}0.2)`,
           }}
           aria-label={`Value in ${unit}`}
         />
@@ -364,18 +374,17 @@ function MetalStepper({
           type="button"
           onClick={() => onChange(clamp(value + 1))}
           disabled={value >= max}
-          className={cn(
-            'flex h-9 w-8 items-center justify-center text-sm font-bold',
-            metalText,
-            'transition hover:text-[#cd853f] disabled:opacity-30',
-            'border-l border-[#15171b]',
-          )}
+          className="flex h-9 w-8 items-center justify-center text-sm font-bold transition disabled:opacity-30"
+          style={{ color: colors.textPrimary, borderLeft: `1px solid ${colors.borderDark}` }}
           aria-label="Increase"
         >
           +
         </button>
       </div>
-      <span className={cn('text-[10px] font-bold uppercase tracking-wider', dimText)}>
+      <span
+        className="text-[10px] font-bold uppercase tracking-wider"
+        style={{ color: colors.textMuted }}
+      >
         {unit}
       </span>
     </div>
@@ -390,10 +399,12 @@ function RegistrationKeyInput({
   value,
   onChange,
   showKey,
+  colors,
 }: {
   value: string
   onChange: (v: string) => void
   showKey: boolean
+  colors: PressThemeColors
 }): React.JSX.Element {
   const segments = [value.slice(0, 4), value.slice(4, 8), value.slice(8, 12)]
   const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
@@ -422,7 +433,7 @@ function RegistrationKeyInput({
     <div className="flex items-center gap-2">
       {segments.map((seg, i) => (
         <div key={i} className="flex items-center gap-2">
-          {i > 0 && <span className={cn('text-sm select-none', dimText)}>&ndash;</span>}
+          {i > 0 && <span className="text-sm select-none" style={{ color: colors.textMuted }}>&ndash;</span>}
           <input
             ref={refs[i]}
             type={showKey ? 'text' : 'password'}
@@ -432,17 +443,14 @@ function RegistrationKeyInput({
             maxLength={4}
             placeholder="0000"
             className={cn(
-              'h-10 w-[4.5rem] rounded text-center text-xs tracking-[0.2em]',
-              insetPanel,
-              brassText,
-              'outline-none placeholder:text-[#3a3f46]',
-              'transition-all duration-200',
-              'focus:ring-1 focus:ring-[#cd853f]/40',
+              'h-10 w-[4.5rem] rounded text-center text-xs tracking-[0.2em] outline-none transition-all duration-200',
               !showKey && 'tracking-normal',
             )}
             style={{
+              ...insetPanelStyle(colors),
               ...monoFont,
-              textShadow: '0 0 8px rgba(205,133,63,0.15)',
+              color: colors.accent,
+              textShadow: `0 0 8px ${colors.accentGlow}0.15)`,
             }}
             aria-label={`Registration key segment ${i + 1}`}
           />
@@ -456,10 +464,9 @@ function RegistrationKeyInput({
 // LED status dot
 // ---------------------------------------------------------------------------
 
-function StatusLED({ status }: { status: PrinterStatus }): React.JSX.Element {
-  const color = status === 'online' ? '#4ade80' : status === 'warning' ? '#f59e0b' : '#6b7280'
+function StatusLED({ status, colors }: { status: PrinterStatus; colors: PressThemeColors }): React.JSX.Element {
+  const color = status === 'online' ? colors.ledGreen : status === 'warning' ? colors.ledAmber : colors.textMuted
   const label = status === 'online' ? 'Online' : status === 'warning' ? 'Warning' : 'Offline'
-  const colorClass = status === 'online' ? ledGreen : status === 'warning' ? ledAmber : dimText
 
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -479,10 +486,70 @@ function StatusLED({ status }: { status: PrinterStatus }): React.JSX.Element {
           }}
         />
       </span>
-      <span className={cn('text-[10px] font-bold uppercase tracking-wider', colorClass)}>
+      <span
+        className="text-[10px] font-bold uppercase tracking-wider"
+        style={{ color }}
+      >
         {label}
       </span>
     </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Theme picker row for Settings
+// ---------------------------------------------------------------------------
+
+function ThemePickerRow({ colors }: { colors: PressThemeColors }): React.JSX.Element {
+  const currentTheme = usePressThemeStore((s) => s.theme)
+  const setTheme = usePressThemeStore((s) => s.setTheme)
+
+  return (
+    <div className="relative p-4 flex items-center justify-between" style={metalPanelStyle(colors)}>
+      <PanelRivets colors={colors} />
+      <div className="flex items-center gap-3 relative">
+        <Palette className="h-3.5 w-3.5" style={{ color: colors.accent }} />
+        <div>
+          <p className="text-xs font-bold" style={{ color: colors.textPrimary }}>PRESS THEME</p>
+          <p className="text-[10px]" style={{ color: colors.textMuted }}>
+            {PRESS_THEME_LABELS[currentTheme]}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {PRESS_THEME_NAMES.map((name) => {
+          const swatch = PRESS_THEME_SWATCHES[name]
+          const isActive = currentTheme === name
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setTheme(name)}
+              title={PRESS_THEME_LABELS[name]}
+              className="relative flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200"
+              style={{
+                background: `linear-gradient(135deg, ${swatch.base} 50%, ${swatch.accent} 50%)`,
+                ...(isActive
+                  ? {
+                      outline: `2px solid ${colors.accent}`,
+                      outlineOffset: '2px',
+                    }
+                  : {
+                      outline: `1px solid ${colors.borderColor}`,
+                      outlineOffset: '0px',
+                    }),
+              }}
+              aria-label={`Switch to ${PRESS_THEME_LABELS[name]} theme`}
+              aria-pressed={isActive}
+            >
+              {isActive && (
+                <Check className="h-3.5 w-3.5 text-white drop-shadow-sm" strokeWidth={3} />
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -492,6 +559,7 @@ function StatusLED({ status }: { status: PrinterStatus }): React.JSX.Element {
 
 export default function SettingsD(): React.JSX.Element {
   const { theme, toggle: toggleTheme } = useTheme()
+  const c = usePressTheme()
 
   // Settings store
   const mode = useSettings((s) => s.mode)
@@ -700,6 +768,7 @@ export default function SettingsD(): React.JSX.Element {
                 icon={HardDrive}
                 title="PHOTO SOURCE"
                 description="Choose how Smart Print discovers new photos. Local watches a folder; Cloud connects to a remote API."
+                colors={c}
               />
 
               {/* Mode selector cards */}
@@ -708,49 +777,52 @@ export default function SettingsD(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => setMode('local')}
-                  className={cn(
-                    'group relative flex flex-col gap-4 rounded-lg p-5 text-left',
-                    'transition-all duration-200',
-                    mode === 'local'
-                      ? [
-                          metalPanel,
-                          'ring-2 ring-[#cd853f]/50',
-                          'shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_12px_rgba(184,115,51,0.15)]',
-                        ]
-                      : [metalPanel, 'hover:border-[#3a3f46]'],
-                  )}
+                  className="group relative flex flex-col gap-4 rounded-lg p-5 text-left transition-all duration-200"
+                  style={{
+                    ...metalPanelStyle(c),
+                    ...(mode === 'local' ? {
+                      outline: `2px solid ${c.accent}80`,
+                      boxShadow: `inset 0 1px 0 ${c.highlightColor}0.04), 0 2px 12px ${c.accentGlow}0.15)`,
+                    } : {}),
+                  }}
                 >
-                  <PanelRivets />
+                  <PanelRivets colors={c} />
                   <div className="flex items-start justify-between relative">
                     <div
-                      className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded',
-                        'transition-all duration-200',
+                      className="flex h-10 w-10 items-center justify-center rounded transition-all duration-200"
+                      style={
                         mode === 'local'
-                          ? 'bg-gradient-to-br from-[#cd853f] to-[#8b5e2b] text-white shadow-[0_2px_6px_rgba(184,115,51,0.3)]'
-                          : 'bg-[#1a1d21] text-[#6b7280] group-hover:text-[#c8ccd2]',
-                      )}
+                          ? {
+                              background: `linear-gradient(to bottom right, ${c.accent}, ${c.accentDark})`,
+                              color: '#ffffff',
+                              boxShadow: `0 2px 6px ${c.accentGlow}0.3)`,
+                            }
+                          : {
+                              backgroundColor: c.baseDark,
+                              color: c.textMuted,
+                            }
+                      }
                     >
                       <HardDrive className="h-4.5 w-4.5" />
                     </div>
                     {/* Indicator LED */}
                     <div className="relative">
                       {mode === 'local' && (
-                        <span className="absolute inset-0 rounded-full bg-[#4ade80] blur-[3px] opacity-40" aria-hidden />
+                        <span className="absolute inset-0 rounded-full blur-[3px] opacity-40" style={{ backgroundColor: c.ledGreen }} aria-hidden />
                       )}
                       <span
-                        className={cn(
-                          'relative block h-3 w-3 rounded-full',
-                          mode === 'local'
-                            ? 'bg-gradient-to-b from-[#86efac] to-[#22c55e]'
-                            : 'bg-gradient-to-b from-[#4a4f56] to-[#3a3f46]',
-                        )}
+                        className="relative block h-3 w-3 rounded-full"
+                        style={{
+                          background: mode === 'local'
+                            ? `linear-gradient(to bottom, ${c.ledGreen}cc, ${c.ledGreen})`
+                            : `linear-gradient(to bottom, ${c.knobOffFrom}, ${c.knobOffTo})`,
+                        }}
                       />
                     </div>
                   </div>
                   <div className="relative">
-                    <p className={cn('text-sm font-bold', metalText)}>LOCAL FOLDER</p>
-                    <p className={cn('mt-1 text-xs leading-relaxed', dimText)}>
+                    <p className="text-sm font-bold" style={{ color: c.textPrimary }}>LOCAL FOLDER</p>
+                    <p className="mt-1 text-xs leading-relaxed" style={{ color: c.textMuted }}>
                       Watch a directory for new images. Best for on-site printing.
                     </p>
                   </div>
@@ -760,48 +832,51 @@ export default function SettingsD(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => setMode('cloud')}
-                  className={cn(
-                    'group relative flex flex-col gap-4 rounded-lg p-5 text-left',
-                    'transition-all duration-200',
-                    mode === 'cloud'
-                      ? [
-                          metalPanel,
-                          'ring-2 ring-[#cd853f]/50',
-                          'shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_12px_rgba(184,115,51,0.15)]',
-                        ]
-                      : [metalPanel, 'hover:border-[#3a3f46]'],
-                  )}
+                  className="group relative flex flex-col gap-4 rounded-lg p-5 text-left transition-all duration-200"
+                  style={{
+                    ...metalPanelStyle(c),
+                    ...(mode === 'cloud' ? {
+                      outline: `2px solid ${c.accent}80`,
+                      boxShadow: `inset 0 1px 0 ${c.highlightColor}0.04), 0 2px 12px ${c.accentGlow}0.15)`,
+                    } : {}),
+                  }}
                 >
-                  <PanelRivets />
+                  <PanelRivets colors={c} />
                   <div className="flex items-start justify-between relative">
                     <div
-                      className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded',
-                        'transition-all duration-200',
+                      className="flex h-10 w-10 items-center justify-center rounded transition-all duration-200"
+                      style={
                         mode === 'cloud'
-                          ? 'bg-gradient-to-br from-[#cd853f] to-[#8b5e2b] text-white shadow-[0_2px_6px_rgba(184,115,51,0.3)]'
-                          : 'bg-[#1a1d21] text-[#6b7280] group-hover:text-[#c8ccd2]',
-                      )}
+                          ? {
+                              background: `linear-gradient(to bottom right, ${c.accent}, ${c.accentDark})`,
+                              color: '#ffffff',
+                              boxShadow: `0 2px 6px ${c.accentGlow}0.3)`,
+                            }
+                          : {
+                              backgroundColor: c.baseDark,
+                              color: c.textMuted,
+                            }
+                      }
                     >
                       <Cloud className="h-4.5 w-4.5" />
                     </div>
                     <div className="relative">
                       {mode === 'cloud' && (
-                        <span className="absolute inset-0 rounded-full bg-[#4ade80] blur-[3px] opacity-40" aria-hidden />
+                        <span className="absolute inset-0 rounded-full blur-[3px] opacity-40" style={{ backgroundColor: c.ledGreen }} aria-hidden />
                       )}
                       <span
-                        className={cn(
-                          'relative block h-3 w-3 rounded-full',
-                          mode === 'cloud'
-                            ? 'bg-gradient-to-b from-[#86efac] to-[#22c55e]'
-                            : 'bg-gradient-to-b from-[#4a4f56] to-[#3a3f46]',
-                        )}
+                        className="relative block h-3 w-3 rounded-full"
+                        style={{
+                          background: mode === 'cloud'
+                            ? `linear-gradient(to bottom, ${c.ledGreen}cc, ${c.ledGreen})`
+                            : `linear-gradient(to bottom, ${c.knobOffFrom}, ${c.knobOffTo})`,
+                        }}
                       />
                     </div>
                   </div>
                   <div className="relative">
-                    <p className={cn('text-sm font-bold', metalText)}>CLOUD SERVICE</p>
-                    <p className={cn('mt-1 text-xs leading-relaxed', dimText)}>
+                    <p className="text-sm font-bold" style={{ color: c.textPrimary }}>CLOUD SERVICE</p>
+                    <p className="mt-1 text-xs leading-relaxed" style={{ color: c.textMuted }}>
                       Receive photos from a remote API. Ideal for multi-location workflows.
                     </p>
                   </div>
@@ -810,22 +885,20 @@ export default function SettingsD(): React.JSX.Element {
 
               {/* Local mode config */}
               {mode === 'local' && (
-                <div className={cn(metalPanel, 'relative mt-5 p-6 space-y-5')}>
-                  <PanelRivets />
-
-                  {/* Watch directory */}
+                <div className="relative mt-5 p-6 space-y-5" style={metalPanelStyle(c)}>
+                  <PanelRivets colors={c} />
                   <div className="relative">
-                    <FieldLabel htmlFor="watch-dir-d">WATCH DIRECTORY</FieldLabel>
+                    <FieldLabel htmlFor="watch-dir-d" colors={c}>WATCH DIRECTORY</FieldLabel>
                     <div className="flex gap-2">
-                      <div className={cn('flex flex-1 items-center rounded px-3', insetPanel)}>
-                        <FolderOpen className={cn('mr-2 h-3.5 w-3.5 shrink-0', dimText)} />
+                      <div className="flex flex-1 items-center rounded px-3" style={insetPanelStyle(c)}>
+                        <FolderOpen className="mr-2 h-3.5 w-3.5 shrink-0" style={{ color: c.textMuted }} />
                         <input
                           id="watch-dir-d"
                           type="text"
                           value={localDirectory}
                           onChange={(e) => setLocalDirectory(e.target.value)}
-                          className={cn('h-9 w-full bg-transparent text-xs outline-none', metalText)}
-                          style={monoFont}
+                          className="h-9 w-full bg-transparent text-xs outline-none"
+                          style={{ ...monoFont, color: c.textPrimary }}
                           placeholder="/path/to/photos"
                         />
                       </div>
@@ -835,22 +908,16 @@ export default function SettingsD(): React.JSX.Element {
                           const result = await window.api.openDirectory()
                           if (!result.canceled && result.path) setLocalDirectory(result.path)
                         }}
-                        className={cn(
-                          'shrink-0 rounded px-4 text-xs font-bold uppercase tracking-wider',
-                          metalPanel,
-                          metalText,
-                          'transition hover:text-[#cd853f]',
-                        )}
+                        className="shrink-0 rounded px-4 text-xs font-bold uppercase tracking-wider transition"
+                        style={{ ...metalPanelStyle(c), color: c.textPrimary }}
                       >
                         BROWSE
                       </button>
                     </div>
-                    <FieldHint>New images in this folder are automatically queued for printing.</FieldHint>
+                    <FieldHint colors={c}>New images in this folder are automatically queued for printing.</FieldHint>
                   </div>
-
-                  {/* File formats */}
                   <div className="relative">
-                    <FieldLabel>FILE FORMATS</FieldLabel>
+                    <FieldLabel colors={c}>FILE FORMATS</FieldLabel>
                     <div className="flex flex-wrap gap-2">
                       {FILE_FORMATS.map((f) => {
                         const active = enabledFormats.has(f.ext)
@@ -859,18 +926,21 @@ export default function SettingsD(): React.JSX.Element {
                             key={f.ext}
                             type="button"
                             onClick={() => toggleFormat(f.ext)}
-                            className={cn(
-                              'rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider',
-                              'transition-all duration-200',
+                            className="rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-200"
+                            style={
                               active
-                                ? [
-                                    'bg-gradient-to-b from-[#cd853f] to-[#b87333]',
-                                    'text-white',
-                                    'shadow-[0_2px_4px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)]',
-                                  ]
-                                : [insetPanel, dimText, 'hover:text-[#c8ccd2]'],
-                            )}
-                            style={monoFont}
+                                ? {
+                                    background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
+                                    color: '#ffffff',
+                                    boxShadow: `0 2px 4px ${c.shadowColor}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
+                                    ...monoFont,
+                                  }
+                                : {
+                                    ...insetPanelStyle(c),
+                                    ...monoFont,
+                                    color: c.textMuted,
+                                  }
+                            }
                           >
                             .{f.ext.toLowerCase()}
                           </button>
@@ -878,43 +948,32 @@ export default function SettingsD(): React.JSX.Element {
                       })}
                     </div>
                   </div>
-
-                  {/* Max file size */}
                   <div className="relative">
-                    <FieldLabel htmlFor="max-file-d">MAX FILE SIZE</FieldLabel>
-                    <MetalStepper
-                      id="max-file-d"
-                      value={maxFileSize}
-                      onChange={setMaxFileSize}
-                      min={1}
-                      max={200}
-                      unit="MB"
-                    />
-                    <FieldHint>Files exceeding this size will be skipped.</FieldHint>
+                    <FieldLabel htmlFor="max-file-d" colors={c}>MAX FILE SIZE</FieldLabel>
+                    <MetalStepper id="max-file-d" value={maxFileSize} onChange={setMaxFileSize} min={1} max={200} unit="MB" colors={c} />
+                    <FieldHint colors={c}>Files exceeding this size will be skipped.</FieldHint>
                   </div>
                 </div>
               )}
 
               {/* Cloud mode config */}
               {mode === 'cloud' && (
-                <div className={cn(metalPanel, 'relative mt-5 p-6 space-y-5')}>
-                  <PanelRivets />
-
-                  {/* Registration key */}
+                <div className="relative mt-5 p-6 space-y-5" style={metalPanelStyle(c)}>
+                  <PanelRivets colors={c} />
                   <div className="relative">
                     <div className="flex items-center justify-between">
-                      <FieldLabel>REGISTRATION KEY</FieldLabel>
+                      <FieldLabel colors={c}>REGISTRATION KEY</FieldLabel>
                       <div className="flex items-center gap-3">
                         {cloudRegistered && (
-                          <span className={cn('flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider', ledGreen)}>
-                            <CheckCircle2 className="h-3 w-3" />
-                            REGISTERED
+                          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: c.ledGreen }}>
+                            <CheckCircle2 className="h-3 w-3" /> REGISTERED
                           </span>
                         )}
                         <button
                           type="button"
                           onClick={() => setShowKey(!showKey)}
-                          className={cn('inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider', dimText, 'hover:text-[#c8ccd2] transition')}
+                          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition"
+                          style={{ color: c.textMuted }}
                         >
                           {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                           {showKey ? 'HIDE' : 'SHOW'}
@@ -922,74 +981,54 @@ export default function SettingsD(): React.JSX.Element {
                       </div>
                     </div>
                     <div className="flex items-end gap-3">
-                      <RegistrationKeyInput
-                        value={registrationKey}
-                        onChange={setRegistrationKey}
-                        showKey={showKey}
-                      />
+                      <RegistrationKeyInput value={registrationKey} onChange={setRegistrationKey} showKey={showKey} colors={c} />
                       {!cloudRegistered && (
                         <button
                           type="button"
                           onClick={handleRegister}
                           disabled={registrationKey.length < 12}
-                          className={cn(
-                            'rounded px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider',
-                            metalPanel,
-                            registrationKey.length < 12
-                              ? cn('cursor-not-allowed', dimText, 'opacity-50')
-                              : cn(metalText, 'hover:text-[#cd853f]'),
-                            'transition',
-                          )}
+                          className="rounded px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition"
+                          style={{
+                            ...metalPanelStyle(c),
+                            color: registrationKey.length < 12 ? c.textMuted : c.textPrimary,
+                            opacity: registrationKey.length < 12 ? 0.5 : 1,
+                          }}
                         >
                           REGISTER
                         </button>
                       )}
                     </div>
-                    <FieldHint>12-character key from your administrator. Format: XXXX-XXXX-XXXX.</FieldHint>
+                    <FieldHint colors={c}>12-character key from your administrator. Format: XXXX-XXXX-XXXX.</FieldHint>
                   </div>
-
-                  {/* API endpoint */}
                   <div className="relative">
-                    <FieldLabel htmlFor="api-d">API ENDPOINT</FieldLabel>
+                    <FieldLabel htmlFor="api-d" colors={c}>API ENDPOINT</FieldLabel>
                     <input
                       id="api-d"
                       type="url"
                       value={cloudApiUrl}
                       onChange={(e) => setCloudApiUrl(e.target.value)}
-                      className={cn(
-                        'h-9 w-full rounded px-3 text-xs',
-                        insetPanel,
-                        metalText,
-                        'outline-none placeholder:text-[#3a3f46]',
-                        'transition-all duration-200',
-                        'focus:ring-1 focus:ring-[#cd853f]/30',
-                      )}
-                      style={monoFont}
+                      className="h-9 w-full rounded px-3 text-xs outline-none transition-all duration-200"
+                      style={{ ...insetPanelStyle(c), ...monoFont, color: c.textPrimary }}
                       placeholder="https://api.example.com/v2"
                     />
                   </div>
-
-                  {/* Connection test */}
                   <div className="flex items-center gap-4 relative">
                     <button
                       type="button"
                       onClick={handleTestConnection}
                       disabled={connectionTest === 'testing'}
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded px-4 py-2 text-[10px] font-bold uppercase tracking-wider',
-                        metalPanel,
-                        connectionTest === 'testing'
-                          ? cn('cursor-not-allowed', dimText)
-                          : cn(metalText, 'hover:text-[#cd853f]'),
-                        'transition',
-                      )}
+                      className="inline-flex items-center gap-2 rounded px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition"
+                      style={{
+                        ...metalPanelStyle(c),
+                        color: connectionTest === 'testing' ? c.textMuted : c.textPrimary,
+                      }}
                     >
                       {connectionTest === 'testing' ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : connectionTest === 'success' ? (
-                        <Wifi className={cn('h-3.5 w-3.5', ledGreen)} />
+                        <Wifi className="h-3.5 w-3.5" style={{ color: c.ledGreen }} />
                       ) : connectionTest === 'error' ? (
-                        <WifiOff className={cn('h-3.5 w-3.5', ledRed)} />
+                        <WifiOff className="h-3.5 w-3.5" style={{ color: c.ledRed }} />
                       ) : (
                         <Wifi className="h-3.5 w-3.5" />
                       )}
@@ -1002,15 +1041,13 @@ export default function SettingsD(): React.JSX.Element {
                             : 'TEST CONNECTION'}
                     </button>
                     {connectionTest === 'success' && (
-                      <span className={cn('flex items-center gap-1 text-[10px] font-bold', ledGreen)}>
-                        <CheckCircle2 className="h-3 w-3" />
-                        AUTHENTICATED
+                      <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: c.ledGreen }}>
+                        <CheckCircle2 className="h-3 w-3" /> AUTHENTICATED
                       </span>
                     )}
                     {connectionTest === 'error' && (
-                      <span className={cn('flex items-center gap-1 text-[10px] font-bold', ledRed)}>
-                        <AlertTriangle className="h-3 w-3" />
-                        UNREACHABLE
+                      <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: c.ledRed }}>
+                        <AlertTriangle className="h-3 w-3" /> UNREACHABLE
                       </span>
                     )}
                   </div>
@@ -1026,12 +1063,13 @@ export default function SettingsD(): React.JSX.Element {
                 icon={Printer}
                 title="PRINTER POOL"
                 description={`Select up to 4 printers for active rotation. ${selectedPoolCount} of 4 slots used.`}
+                colors={c}
               />
 
               {printerLoading && printers.length === 0 && (
-                <div className={cn(metalPanel, 'flex items-center justify-center p-10')}>
-                  <Loader2 className={cn('mr-3 h-5 w-5 animate-spin', dimText)} />
-                  <span className={cn('text-xs font-bold uppercase tracking-wider', dimText)}>
+                <div className="flex items-center justify-center p-10" style={metalPanelStyle(c)}>
+                  <Loader2 className="mr-3 h-5 w-5 animate-spin" style={{ color: c.textMuted }} />
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: c.textMuted }}>
                     DISCOVERING PRINTERS...
                   </span>
                 </div>
@@ -1049,69 +1087,69 @@ export default function SettingsD(): React.JSX.Element {
                   return (
                     <div
                       key={printer.name}
-                      className={cn(
-                        metalPanel,
-                        'group relative p-4',
-                        'transition-all duration-200',
-                        isInPool && 'ring-1 ring-[#cd853f]/40 shadow-[0_2px_12px_rgba(184,115,51,0.1)]',
-                        displayStatus === 'offline' && 'opacity-50',
-                      )}
+                      className="group relative p-4 transition-all duration-200"
+                      style={{
+                        ...metalPanelStyle(c),
+                        ...(isInPool ? {
+                          outline: `1px solid ${c.accent}66`,
+                          boxShadow: `0 2px 12px ${c.accentGlow}0.1)`,
+                        } : {}),
+                        opacity: displayStatus === 'offline' ? 0.5 : 1,
+                      }}
                     >
-                      <PanelRivets />
+                      <PanelRivets colors={c} />
                       <div className="flex items-start gap-3 relative">
-                        {/* Industrial checkbox */}
                         <button
                           type="button"
                           onClick={() => handleTogglePrinter(printer)}
                           disabled={isDisabledToggle}
-                          className={cn(
-                            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded',
-                            'transition-all duration-200',
+                          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-all duration-200"
+                          style={
                             isInPool
-                              ? 'bg-gradient-to-b from-[#cd853f] to-[#b87333] shadow-[0_2px_4px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)]'
+                              ? {
+                                  background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
+                                  boxShadow: `0 2px 4px ${c.shadowColor}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
+                                }
                               : isDisabledToggle
-                                ? cn('cursor-not-allowed opacity-40', insetPanel)
-                                : cn(insetPanel, 'hover:ring-1 hover:ring-[#cd853f]/30'),
-                          )}
+                                ? { ...insetPanelStyle(c), opacity: 0.4, cursor: 'not-allowed' }
+                                : insetPanelStyle(c)
+                          }
                           aria-label={`${isInPool ? 'Remove' : 'Add'} ${printer.displayName}`}
                         >
                           {isInPool && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
                         </button>
-
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className={cn('truncate text-xs font-bold', metalText)}>
+                            <p className="truncate text-xs font-bold" style={{ color: c.textPrimary }}>
                               {printer.displayName}
                             </p>
                             {printer.isDefault && (
-                              <span className={cn(
-                                'shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider',
-                                'bg-[#cd853f]/15', brassText,
-                              )}>
+                              <span
+                                className="shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider"
+                                style={{
+                                  backgroundColor: `${c.accent}26`,
+                                  color: c.accent,
+                                }}
+                              >
                                 DEFAULT
                               </span>
                             )}
                           </div>
                           <div className="mt-1.5 flex items-center gap-3">
-                            <StatusLED status={displayStatus} />
-                            <span className={cn('text-[10px]', dimText)} style={monoFont}>
+                            <StatusLED status={displayStatus} colors={c} />
+                            <span className="text-[10px]" style={{ ...monoFont, color: c.textMuted }}>
                               {paperLabel}
                             </span>
                           </div>
                         </div>
                       </div>
-
-                      {/* Set default */}
                       {isInPool && !printer.isDefault && (
-                        <div className="mt-3 pt-3 border-t border-[#3a3f46]/30 relative">
+                        <div className="mt-3 pt-3 relative" style={{ borderTop: `1px solid ${c.borderColor}` }}>
                           <button
                             type="button"
                             onClick={() => handleSetDefault(printer.name)}
-                            className={cn(
-                              'rounded px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider',
-                              dimText,
-                              'opacity-0 transition group-hover:opacity-100 hover:text-[#cd853f]',
-                            )}
+                            className="rounded px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider opacity-0 transition group-hover:opacity-100"
+                            style={{ color: c.textMuted }}
                           >
                             SET AS DEFAULT
                           </button>
@@ -1123,11 +1161,11 @@ export default function SettingsD(): React.JSX.Element {
               </div>
 
               {/* Paper size selector */}
-              <div className={cn(metalPanel, 'relative mt-4 flex items-center justify-between p-4')}>
-                <PanelRivets />
+              <div className="relative mt-4 flex items-center justify-between p-4" style={metalPanelStyle(c)}>
+                <PanelRivets colors={c} />
                 <div className="relative">
-                  <p className={cn('text-xs font-bold', metalText)}>PAPER SIZE</p>
-                  <p className={cn('mt-0.5 text-[10px]', dimText)}>
+                  <p className="text-xs font-bold" style={{ color: c.textPrimary }}>PAPER SIZE</p>
+                  <p className="mt-0.5 text-[10px]" style={{ color: c.textMuted }}>
                     {paperSizeSource
                       ? `Sizes from ${paperSizeSource} driver`
                       : 'Select a printer to load driver sizes'}
@@ -1138,6 +1176,7 @@ export default function SettingsD(): React.JSX.Element {
                   onChange={(v) => setPaperSize(v)}
                   options={availablePaperSizes}
                   className="w-40"
+                  colors={c}
                 />
               </div>
             </section>
@@ -1150,58 +1189,45 @@ export default function SettingsD(): React.JSX.Element {
                 icon={Gauge}
                 title="GENERAL"
                 description="Fine-tune performance, logging, and appearance."
+                colors={c}
               />
 
               <div className="space-y-4">
                 {/* Timing row */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className={cn(metalPanel, 'relative p-5')}>
-                    <PanelRivets />
+                  <div className="relative p-5" style={metalPanelStyle(c)}>
+                    <PanelRivets colors={c} />
                     <div className="mb-3 flex items-center gap-2 relative">
-                      <Clock className={cn('h-3.5 w-3.5', brassText)} />
-                      <span className={cn('text-[10px] font-bold uppercase tracking-[0.12em]', metalText)}>
+                      <Clock className="h-3.5 w-3.5" style={{ color: c.accent }} />
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: c.textPrimary }}>
                         POLL INTERVAL
                       </span>
                     </div>
-                    <MetalStepper
-                      id="poll-d"
-                      value={pollIntervalSec}
-                      onChange={(sec) => setPollIntervalMs(sec * 1000)}
-                      min={1}
-                      max={60}
-                      unit="SEC"
-                    />
-                    <FieldHint>How often to check for new photos.</FieldHint>
+                    <MetalStepper id="poll-d" value={pollIntervalSec} onChange={(sec) => setPollIntervalMs(sec * 1000)} min={1} max={60} unit="SEC" colors={c} />
+                    <FieldHint colors={c}>How often to check for new photos.</FieldHint>
                   </div>
 
-                  <div className={cn(metalPanel, 'relative p-5')}>
-                    <PanelRivets />
+                  <div className="relative p-5" style={metalPanelStyle(c)}>
+                    <PanelRivets colors={c} />
                     <div className="mb-3 flex items-center gap-2 relative">
-                      <RefreshCw className={cn('h-3.5 w-3.5', brassText)} />
-                      <span className={cn('text-[10px] font-bold uppercase tracking-[0.12em]', metalText)}>
+                      <RefreshCw className="h-3.5 w-3.5" style={{ color: c.accent }} />
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: c.textPrimary }}>
                         HEALTH CHECK
                       </span>
                     </div>
-                    <MetalStepper
-                      id="health-d"
-                      value={healthIntervalSec}
-                      onChange={(sec) => setHealthIntervalMs(sec * 1000)}
-                      min={5}
-                      max={300}
-                      unit="SEC"
-                    />
-                    <FieldHint>Frequency of printer health pings.</FieldHint>
+                    <MetalStepper id="health-d" value={healthIntervalSec} onChange={(sec) => setHealthIntervalMs(sec * 1000)} min={5} max={300} unit="SEC" colors={c} />
+                    <FieldHint colors={c}>Frequency of printer health pings.</FieldHint>
                   </div>
                 </div>
 
                 {/* Log level */}
-                <div className={cn(metalPanel, 'relative flex items-center justify-between p-4')}>
-                  <PanelRivets />
+                <div className="relative flex items-center justify-between p-4" style={metalPanelStyle(c)}>
+                  <PanelRivets colors={c} />
                   <div className="flex items-center gap-3 relative">
-                    <FileText className={cn('h-3.5 w-3.5', brassText)} />
+                    <FileText className="h-3.5 w-3.5" style={{ color: c.accent }} />
                     <div>
-                      <p className={cn('text-xs font-bold', metalText)}>LOG LEVEL</p>
-                      <p className={cn('text-[10px]', dimText)}>Controls log verbosity</p>
+                      <p className="text-xs font-bold" style={{ color: c.textPrimary }}>LOG LEVEL</p>
+                      <p className="text-[10px]" style={{ color: c.textMuted }}>Controls log verbosity</p>
                     </div>
                   </div>
                   <MetalSelect
@@ -1214,17 +1240,18 @@ export default function SettingsD(): React.JSX.Element {
                       { value: 'error', label: 'Error' },
                     ]}
                     className="w-28"
+                    colors={c}
                   />
                 </div>
 
                 {/* Print copies */}
-                <div className={cn(metalPanel, 'relative flex items-center justify-between p-4')}>
-                  <PanelRivets />
+                <div className="relative flex items-center justify-between p-4" style={metalPanelStyle(c)}>
+                  <PanelRivets colors={c} />
                   <div className="flex items-center gap-3 relative">
-                    <Copy className={cn('h-3.5 w-3.5', brassText)} />
+                    <Copy className="h-3.5 w-3.5" style={{ color: c.accent }} />
                     <div>
-                      <p className={cn('text-xs font-bold', metalText)}>PRINT COPIES</p>
-                      <p className={cn('text-[10px]', dimText)}>Copies per print job</p>
+                      <p className="text-xs font-bold" style={{ color: c.textPrimary }}>PRINT COPIES</p>
+                      <p className="text-[10px]" style={{ color: c.textMuted }}>Copies per print job</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1232,20 +1259,17 @@ export default function SettingsD(): React.JSX.Element {
                       type="button"
                       onClick={() => setCopies(copies - 1)}
                       disabled={copies <= 1}
-                      className={cn(
-                        'flex h-7 w-7 items-center justify-center rounded text-sm font-bold',
-                        insetPanel,
-                        metalText,
-                        'transition hover:text-[#cd853f] disabled:opacity-30',
-                      )}
+                      className="flex h-7 w-7 items-center justify-center rounded text-sm font-bold transition disabled:opacity-30"
+                      style={{ ...insetPanelStyle(c), color: c.textPrimary }}
                     >
                       -
                     </button>
                     <span
-                      className={cn('w-7 text-center text-sm font-bold tabular-nums', brassText)}
+                      className="w-7 text-center text-sm font-bold tabular-nums"
                       style={{
                         ...monoFont,
-                        textShadow: '0 0 8px rgba(205,133,63,0.2)',
+                        color: c.accent,
+                        textShadow: `0 0 8px ${c.accentGlow}0.2)`,
                       }}
                     >
                       {copies}
@@ -1254,12 +1278,8 @@ export default function SettingsD(): React.JSX.Element {
                       type="button"
                       onClick={() => setCopies(copies + 1)}
                       disabled={copies >= 10}
-                      className={cn(
-                        'flex h-7 w-7 items-center justify-center rounded text-sm font-bold',
-                        insetPanel,
-                        metalText,
-                        'transition hover:text-[#cd853f] disabled:opacity-30',
-                      )}
+                      className="flex h-7 w-7 items-center justify-center rounded text-sm font-bold transition disabled:opacity-30"
+                      style={{ ...insetPanelStyle(c), color: c.textPrimary }}
                     >
                       +
                     </button>
@@ -1267,27 +1287,30 @@ export default function SettingsD(): React.JSX.Element {
                 </div>
 
                 {/* Appearance - industrial rocker switch */}
-                <div className={cn(metalPanel, 'relative flex items-center justify-between p-4')}>
-                  <PanelRivets />
+                <div className="relative flex items-center justify-between p-4" style={metalPanelStyle(c)}>
+                  <PanelRivets colors={c} />
                   <div className="flex items-center gap-3 relative">
                     {theme === 'dark' ? (
-                      <Moon className={cn('h-3.5 w-3.5', brassText)} />
+                      <Moon className="h-3.5 w-3.5" style={{ color: c.accent }} />
                     ) : (
-                      <Sun className={cn('h-3.5 w-3.5', brassText)} />
+                      <Sun className="h-3.5 w-3.5" style={{ color: c.accent }} />
                     )}
                     <div>
-                      <p className={cn('text-xs font-bold', metalText)}>APPEARANCE</p>
-                      <p className={cn('text-[10px]', dimText)}>
+                      <p className="text-xs font-bold" style={{ color: c.textPrimary }}>APPEARANCE</p>
+                      <p className="text-[10px]" style={{ color: c.textMuted }}>
                         {theme === 'dark' ? 'Dark mode active' : 'Light mode active'}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Sun className={cn('h-3.5 w-3.5', theme === 'light' ? brassText : dimText)} />
-                    <RockerSwitch checked={theme === 'dark'} onChange={toggleTheme} />
-                    <Moon className={cn('h-3.5 w-3.5', theme === 'dark' ? brassText : dimText)} />
+                    <Sun className="h-3.5 w-3.5" style={{ color: theme === 'light' ? c.accent : c.textMuted }} />
+                    <RockerSwitch checked={theme === 'dark'} onChange={toggleTheme} colors={c} />
+                    <Moon className="h-3.5 w-3.5" style={{ color: theme === 'dark' ? c.accent : c.textMuted }} />
                   </div>
                 </div>
+
+                {/* Press theme picker */}
+                <ThemePickerRow colors={c} />
               </div>
             </section>
 
@@ -1299,31 +1322,27 @@ export default function SettingsD(): React.JSX.Element {
 
       {/* ---- Sticky action bar - riveted metal strip ---- */}
       <div
-        className={cn(
-          'shrink-0 px-6 py-4',
-          'bg-gradient-to-b from-[#2d3238] to-[#22262b]',
-          'border-t border-[#3a3f46]/60',
-          'shadow-[0_-2px_8px_rgba(0,0,0,0.3)]',
-        )}
+        className="shrink-0 px-6 py-4"
+        style={{
+          background: `linear-gradient(to bottom, ${c.baseLight}, ${c.baseMid})`,
+          borderTop: `1px solid ${c.borderColor}`,
+          boxShadow: `0 -2px 8px ${c.shadowColor}0.3)`,
+        }}
       >
         <div className="mx-auto flex max-w-[54rem] items-center justify-between">
           <div className="flex items-center gap-2">
-            <Rivet />
-            <p className={cn('text-[10px] uppercase tracking-wider', dimText)}>
+            <Rivet colors={c} />
+            <p className="text-[10px] uppercase tracking-wider" style={{ color: c.textMuted }}>
               Changes saved locally to this machine
             </p>
-            <Rivet />
+            <Rivet colors={c} />
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleReset}
-              className={cn(
-                'inline-flex items-center gap-2 rounded px-4 py-2 text-[10px] font-bold uppercase tracking-wider',
-                metalPanel,
-                dimText,
-                'transition hover:text-[#c8ccd2]',
-              )}
+              className="inline-flex items-center gap-2 rounded px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition"
+              style={{ ...metalPanelStyle(c), color: c.textMuted }}
             >
               <RotateCcw className="h-3 w-3" />
               RESET
@@ -1333,15 +1352,19 @@ export default function SettingsD(): React.JSX.Element {
               type="button"
               onClick={handleSave}
               disabled={saveState !== 'idle'}
-              className={cn(
-                'relative inline-flex h-9 items-center gap-2 overflow-hidden rounded px-5 text-[10px] font-bold uppercase tracking-wider',
-                'transition-all duration-200',
+              className="relative inline-flex h-9 items-center gap-2 overflow-hidden rounded px-5 text-[10px] font-bold uppercase tracking-wider text-white transition-all duration-200"
+              style={
                 saveState === 'saved'
-                  ? 'bg-gradient-to-b from-[#4ade80] to-[#22c55e] text-white shadow-[0_2px_8px_rgba(74,222,128,0.3)]'
-                  : 'bg-gradient-to-b from-[#cd853f] to-[#b87333] text-white shadow-[0_2px_8px_rgba(184,115,51,0.3),inset_0_1px_0_rgba(255,255,255,0.15)]',
-                saveState === 'saving' && 'cursor-not-allowed',
-                saveState === 'idle' && 'hover:brightness-110 hover:shadow-[0_4px_12px_rgba(184,115,51,0.4)]',
-              )}
+                  ? {
+                      background: `linear-gradient(to bottom, ${c.ledGreen}, ${c.ledGreen}cc)`,
+                      boxShadow: `0 2px 8px ${c.ledGreen}4d`,
+                    }
+                  : {
+                      background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
+                      boxShadow: `0 2px 8px ${c.accentGlow}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
+                      cursor: saveState === 'saving' ? 'not-allowed' : 'pointer',
+                    }
+              }
             >
               {saveState === 'idle' && (
                 <><Save className="h-3 w-3" /> SAVE CHANGES</>

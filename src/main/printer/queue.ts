@@ -6,7 +6,8 @@
  */
 
 import { BrowserWindow } from 'electron'
-import { access, constants } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
+import { extname } from 'node:path'
 import winston from 'winston'
 import { selectNextPrinter, getPrinterByName, getPrinterPool } from './manager'
 import type { PrinterInfo } from './manager'
@@ -122,17 +123,19 @@ function resolvePageSize(
 // ---------------------------------------------------------------------------
 
 async function executePrint(job: PrintJob): Promise<boolean> {
-  // Verify the image file still exists
+  // Read the image file into memory as base64 — avoids file:// URL security
+  // restrictions that prevent hidden BrowserWindows from loading local files.
+  let imageDataUrl: string
   try {
-    await access(job.filepath, constants.R_OK)
+    const buf = await readFile(job.filepath)
+    const ext = extname(job.filepath).toLowerCase()
+    const mime = ext === '.png' ? 'image/png' : 'image/jpeg'
+    imageDataUrl = `data:${mime};base64,${buf.toString('base64')}`
   } catch {
     throw new Error(`Image file not found or not readable: ${job.filepath}`)
   }
 
   const pageSize = resolvePageSize(job.options.paperSize)
-
-  // Normalize filepath for file:// URL (handle Windows backslashes)
-  const fileUrl = `file://${job.filepath.replace(/\\/g, '/')}`
 
   const html = `<!DOCTYPE html>
 <html><head><style>
@@ -142,7 +145,7 @@ async function executePrint(job: PrintJob): Promise<boolean> {
   body { display: flex; align-items: center; justify-content: center; background: #fff; }
   img { width: 100%; height: 100%; object-fit: cover; }
 </style></head><body>
-  <img id="photo" src="${fileUrl}" />
+  <img id="photo" src="${imageDataUrl}" />
 </body></html>`
 
   const printWindow = new BrowserWindow({

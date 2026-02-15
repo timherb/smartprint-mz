@@ -2,6 +2,10 @@ import { app, shell, BrowserWindow, ipcMain, dialog, screen } from 'electron'
 import { join, extname } from 'path'
 import { readFile, readdir, stat } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import ElectronStoreModule from 'electron-store'
+// Handle ESM/CJS interop - electron-store v11 is ESM-only
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ElectronStore = ((ElectronStoreModule as any).default || ElectronStoreModule) as typeof ElectronStoreModule
 import icon from '../../resources/icon.png?asset'
 import { setupAutoUpdater } from './updater'
 import { LocalWatcher } from './watcher'
@@ -153,6 +157,34 @@ app.whenReady().then(() => {
         console.error('[onJobDone] Failed to move file to processed:', err)
       })
     }
+  })
+
+  // ── Settings persistence via electron-store ──
+  const settingsStore = new ElectronStore({
+    name: 'app-settings',
+    defaults: {
+      mode: 'local',
+      localDirectory: '',
+      cloudApiUrl: '',
+      cloudRegistered: false,
+      pollInterval: 5000,
+      healthInterval: 30000,
+      logLevel: 'info',
+      paperSize: '',
+      printerPool: [] as string[],
+      copies: 1
+    }
+  })
+
+  ipcMain.handle('settings:get', () => {
+    return settingsStore.store
+  })
+
+  ipcMain.handle('settings:set', (_event, data: Record<string, unknown>) => {
+    for (const [key, value] of Object.entries(data)) {
+      settingsStore.set(key, value)
+    }
+    return { success: true }
   })
 
   // IPC handlers will be registered here as features are built

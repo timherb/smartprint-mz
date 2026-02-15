@@ -26,8 +26,6 @@ import {
   FileImage,
   Ban,
   Printer,
-  Zap,
-  ZapOff,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -581,8 +579,6 @@ export default function MonitorB3(): React.JSX.Element {
   const photos = useGallery().photos
   const lastPhoto = photos.length > 0 ? photos[photos.length - 1] : null
   const mode = useSettings((s) => s.mode)
-  const autoPrint = useSettings((s) => s.autoPrint)
-  const setAutoPrint = useSettings((s) => s.setAutoPrint)
   const cloudConnected = useCloud((s) => s.connected)
   const watcherRunning = useWatcher((s) => s.running)
 
@@ -764,37 +760,6 @@ export default function MonitorB3(): React.JSX.Element {
                 )}
               </button>
 
-              {/* Auto-print toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  const newValue = !autoPrint
-                  setAutoPrint(newValue)
-                  // When enabling auto-print, scan for pending files and print them
-                  if (newValue) {
-                    useWatcher.getState().scanAndPrint()
-                  }
-                }}
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-xs font-semibold',
-                  'transition-all duration-300 hover:scale-[1.01]',
-                  autoPrint
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 shadow-sm'
-                    : 'border-border bg-card text-muted-foreground shadow-sm hover:text-foreground'
-                )}
-              >
-                {autoPrint ? (
-                  <>
-                    <Zap className="h-3.5 w-3.5" />
-                    Auto-Print On
-                  </>
-                ) : (
-                  <>
-                    <ZapOff className="h-3.5 w-3.5" />
-                    Auto-Print Off
-                  </>
-                )}
-              </button>
             </div>
           </div>
 

@@ -29,8 +29,6 @@ import {
   ChevronDown,
   Loader2,
   Sparkles,
-  Zap,
-  ZapOff,
   Copy,
 } from 'lucide-react'
 
@@ -399,8 +397,6 @@ export default function SettingsB3(): React.JSX.Element {
   const [connectionTest, setConnectionTest] = useState<ConnectionTestState>('idle')
   const paperSize = useSettings((s) => s.paperSize)
   const setPaperSize = useSettings((s) => s.setPaperSize)
-  const autoPrint = useSettings((s) => s.autoPrint)
-  const setAutoPrint = useSettings((s) => s.setAutoPrint)
   const copies = useSettings((s) => s.copies)
   const setCopies = useSettings((s) => s.setCopies)
 
@@ -1072,33 +1068,6 @@ export default function SettingsB3(): React.JSX.Element {
                     ]}
                     className="w-28"
                   />
-                </div>
-
-                {/* Auto-Print toggle */}
-                <div className="flex items-center justify-between rounded-2xl bg-card p-5 shadow-sm">
-                  <div className="flex items-center gap-3.5">
-                    <div
-                      className={cn(
-                        'flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-300',
-                        autoPrint
-                          ? 'bg-emerald-500/10 text-emerald-500'
-                          : 'bg-secondary text-muted-foreground'
-                      )}
-                    >
-                      {autoPrint ? (
-                        <Zap className="h-4 w-4" />
-                      ) : (
-                        <ZapOff className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Auto-Print</p>
-                      <p className="text-xs text-muted-foreground">
-                        Automatically send new photos to the print queue
-                      </p>
-                    </div>
-                  </div>
-                  <Toggle checked={autoPrint} onChange={setAutoPrint} />
                 </div>
 
                 {/* Print copies */}

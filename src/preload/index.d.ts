@@ -197,6 +197,10 @@ interface SmartPrintAPI {
   setWindowTitle: (title: string) => void
   openDirectory: () => Promise<{ canceled: boolean; path: string }>
   readImageAsDataUrl: (filepath: string) => Promise<string | null>
+  settings: {
+    get: () => Promise<Record<string, unknown>>
+    set: (data: Record<string, unknown>) => Promise<{ success: boolean }>
+  }
   gallery: GalleryAPI
   cloud: CloudAPI
   watcher: WatcherAPI

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error'
 
@@ -13,8 +13,9 @@ interface SettingsState {
   logLevel: LogLevel
   paperSize: string
   printerPool: string[]
-  autoPrint: boolean
+  readonly autoPrint: true
   copies: number
+  _loaded: boolean
   setMode: (mode: 'local' | 'cloud') => void
   setLocalDirectory: (dir: string) => void
   setCloudApiUrl: (url: string) => void
@@ -24,9 +25,40 @@ interface SettingsState {
   setLogLevel: (level: LogLevel) => void
   setPaperSize: (size: string) => void
   setPrinterPool: (pool: string[]) => void
-  setAutoPrint: (enabled: boolean) => void
   setCopies: (n: number) => void
+  loadFromMain: () => Promise<void>
 }
+
+// ---------------------------------------------------------------------------
+// Custom storage backed by electron-store via IPC (survives portable restarts)
+// ---------------------------------------------------------------------------
+
+const electronStorage = createJSONStorage<SettingsState>(() => ({
+  getItem: async () => {
+    try {
+      const data = await window.api.settings.get()
+      return JSON.stringify({ state: data })
+    } catch {
+      return null
+    }
+  },
+  setItem: async (_name: string, value: string) => {
+    try {
+      const parsed = JSON.parse(value)
+      const state = parsed.state ?? parsed
+      await window.api.settings.set(state)
+    } catch {
+      // Ignore serialization errors
+    }
+  },
+  removeItem: async () => {
+    // Not used — settings are never fully cleared
+  }
+}))
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 
 export const useSettings = create<SettingsState>()(
   persist(
@@ -40,8 +72,9 @@ export const useSettings = create<SettingsState>()(
       logLevel: 'info',
       paperSize: '',
       printerPool: [],
-      autoPrint: true,
+      autoPrint: true as const,
       copies: 1,
+      _loaded: false,
 
       setMode: (mode) => set({ mode }),
       setLocalDirectory: (dir) => set({ localDirectory: dir }),
@@ -52,24 +85,19 @@ export const useSettings = create<SettingsState>()(
       setLogLevel: (level) => set({ logLevel: level }),
       setPaperSize: (size) => set({ paperSize: size }),
       setPrinterPool: (pool) => set({ printerPool: pool }),
-      setAutoPrint: (enabled) => set({ autoPrint: enabled }),
-      setCopies: (n) => set({ copies: Math.max(1, Math.min(10, n)) })
+      setCopies: (n) => set({ copies: Math.max(1, Math.min(10, n)) }),
+      loadFromMain: async () => {
+        try {
+          const data = await window.api.settings.get()
+          set({ ...data, _loaded: true } as Partial<SettingsState>)
+        } catch {
+          set({ _loaded: true })
+        }
+      }
     }),
     {
       name: 'smart-print-settings',
-      partialize: (state) => ({
-        mode: state.mode,
-        localDirectory: state.localDirectory,
-        cloudApiUrl: state.cloudApiUrl,
-        cloudRegistered: state.cloudRegistered,
-        pollInterval: state.pollInterval,
-        healthInterval: state.healthInterval,
-        logLevel: state.logLevel,
-        paperSize: state.paperSize,
-        printerPool: state.printerPool,
-        autoPrint: state.autoPrint,
-        copies: state.copies
-      })
+      storage: electronStorage
     }
   )
 )

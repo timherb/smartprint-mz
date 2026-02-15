@@ -101,6 +101,14 @@ const api = {
   readImageAsDataUrl: (filepath: string): Promise<string | null> =>
     ipcRenderer.invoke('file:read-as-data-url', filepath),
 
+  // Settings: persist to electron-store on main process
+  settings: {
+    get: (): Promise<Record<string, unknown>> =>
+      ipcRenderer.invoke('settings:get'),
+    set: (data: Record<string, unknown>): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('settings:set', data),
+  },
+
   // Gallery: scan printed photos folder
   gallery: {
     scanPrintedFolder: (directory: string): Promise<{

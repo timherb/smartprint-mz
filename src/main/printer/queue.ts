@@ -5,10 +5,8 @@
  * and automatic fallback to the next healthy printer on failure.
  */
 
-import { BrowserWindow } from 'electron'
-import { writeFile, unlink, mkdtemp } from 'node:fs/promises'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { exec } from 'node:child_process'
+import { stat } from 'node:fs/promises'
 import winston from 'winston'
 import { selectNextPrinter, getPrinterByName, getPrinterPool } from './manager'
 import type { PrinterInfo } from './manager'
@@ -118,103 +116,112 @@ function resolvePageSize(
 // ---------------------------------------------------------------------------
 
 async function executePrint(job: PrintJob): Promise<boolean> {
-  // Build a file:// URL for the image. The hidden window uses webSecurity:false
-  // so it can load local file:// resources without CORS restrictions.
-  // Windows paths need three slashes: file:///C:/path/to/file.png
-  const normalizedPath = job.filepath.replace(/\\/g, '/')
-  const fileUrl = normalizedPath.startsWith('/')
-    ? `file://${normalizedPath}`
-    : `file:///${normalizedPath}`
-
-  // pageSize disabled for debugging — letting driver use its default
-  // const pageSize = resolvePageSize(job.options.paperSize)
-
-  const html = `<!DOCTYPE html>
-<html><head><style>
-  @page { margin: 0; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; }
-  body { display: flex; align-items: center; justify-content: center; background: #fff; }
-  img { width: 100%; height: 100%; object-fit: cover; }
-</style></head><body>
-  <img id="photo" />
-</body></html>`
-
-  // Write a minimal HTML file (no embedded image data) and load via loadFile.
-  // The image is loaded separately via file:// URL with webSecurity disabled.
-  const tempDir = await mkdtemp(join(tmpdir(), 'smart-print-'))
-  const tempHtml = join(tempDir, 'print.html')
-  await writeFile(tempHtml, html, 'utf-8')
-
-  const printWindow = new BrowserWindow({
-    show: true, // Visible for debugging — will hide once printing works
-    width: 800,
-    height: 600,
-    webPreferences: {
-      webSecurity: false,
-      offscreen: false
-    }
-  })
-
+  // Verify file exists
   try {
-    await printWindow.loadFile(tempHtml)
-
-    // Set the image src and wait for it to load. Using executeJavaScript
-    // to set src avoids embedding large base64 in the HTML file.
-    const dimensions: { w: number; h: number } = await printWindow.webContents.executeJavaScript(`
-      new Promise((resolve, reject) => {
-        const img = document.getElementById('photo');
-        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        img.onerror = (e) => reject(new Error('Image failed to load: ' + '${fileUrl}'));
-        img.src = '${fileUrl}';
-      })
-    `)
-
-    logger.info('Image loaded for printing', {
-      jobId: job.id,
-      width: dimensions.w,
-      height: dimensions.h,
-      printer: job.printerName
-    })
-
-    // Auto-detect landscape from image dimensions unless explicitly set
-    const landscape = job.options.landscape ?? (dimensions.w > dimensions.h)
-
-    return new Promise<boolean>((resolve) => {
-      printWindow.webContents.print(
-        {
-          silent: false, // Show print dialog for debugging
-          printBackground: true,
-          deviceName: job.printerName,
-          color: job.options.color ?? true,
-          copies: job.options.copies ?? 1,
-          landscape
-        },
-        (success, failureReason) => {
-          if (!success) {
-            logger.error('Print failed', {
-              jobId: job.id,
-              printer: job.printerName,
-              reason: failureReason
-            })
-          } else {
-            logger.info('Print succeeded', { jobId: job.id, printer: job.printerName })
-          }
-          resolve(success)
-        }
-      )
-    })
-  } catch (err) {
-    logger.error('Failed to prepare print window', {
-      jobId: job.id,
-      filepath: job.filepath,
-      error: String(err)
-    })
-    throw err
-  } finally {
-    printWindow.destroy()
-    unlink(tempHtml).catch(() => {})
+    await stat(job.filepath)
+  } catch {
+    throw new Error(`Image file not found: ${job.filepath}`)
   }
+
+  const copies = job.options.copies ?? 1
+
+  if (process.platform === 'win32') {
+    return executePrintWindows(job.filepath, job.printerName, copies, job.id)
+  }
+
+  // macOS/Linux: use lp command
+  return executePrintUnix(job.filepath, job.printerName, copies, job.id)
+}
+
+/**
+ * Print on Windows using PowerShell + .NET System.Drawing.
+ * This bypasses Electron's broken webContents.print() and goes through
+ * the standard Windows GDI print pipeline that all native apps use.
+ */
+function executePrintWindows(
+  filepath: string,
+  printerName: string,
+  copies: number,
+  jobId: string
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Escape single quotes for PowerShell
+    const psPath = filepath.replace(/'/g, "''")
+    const psPrinter = printerName.replace(/'/g, "''")
+
+    const script = `
+Add-Type -AssemblyName System.Drawing
+$bmp = [System.Drawing.Bitmap]::FromFile('${psPath}')
+$pd = New-Object System.Drawing.Printing.PrintDocument
+$pd.PrinterSettings.PrinterName = '${psPrinter}'
+$pd.PrinterSettings.Copies = ${copies}
+$pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+if ($bmp.Width -gt $bmp.Height) { $pd.DefaultPageSettings.Landscape = $true }
+$pd.add_PrintPage({
+  param($sender, $e)
+  $destRect = $e.MarginBounds
+  $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $e.Graphics.DrawImage($bmp, $destRect)
+})
+$pd.Print()
+$bmp.Dispose()
+`
+
+    logger.info('Printing via Windows GDI', { jobId, printer: printerName, filepath })
+
+    exec(
+      `powershell -NoProfile -NonInteractive -Command "${script.replace(/"/g, '\\"')}"`,
+      { timeout: 30000 },
+      (error, _stdout, stderr) => {
+        if (error) {
+          logger.error('Windows print failed', {
+            jobId,
+            printer: printerName,
+            error: error.message,
+            stderr: stderr?.trim()
+          })
+          resolve(false)
+        } else {
+          logger.info('Windows print succeeded', { jobId, printer: printerName })
+          resolve(true)
+        }
+      }
+    )
+  })
+}
+
+/**
+ * Print on macOS/Linux using the lp command.
+ */
+function executePrintUnix(
+  filepath: string,
+  printerName: string,
+  copies: number,
+  jobId: string
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const args = ['-d', printerName, '-n', String(copies), filepath]
+    logger.info('Printing via lp', { jobId, printer: printerName, filepath })
+
+    exec(
+      `lp ${args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`,
+      { timeout: 30000 },
+      (error, _stdout, stderr) => {
+        if (error) {
+          logger.error('Unix print failed', {
+            jobId,
+            printer: printerName,
+            error: error.message,
+            stderr: stderr?.trim()
+          })
+          resolve(false)
+        } else {
+          logger.info('Unix print succeeded', { jobId, printer: printerName })
+          resolve(true)
+        }
+      }
+    )
+  })
 }
 
 /**

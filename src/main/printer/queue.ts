@@ -6,8 +6,9 @@
  */
 
 import { BrowserWindow } from 'electron'
-import { readFile } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { readFile, writeFile, unlink, mkdtemp } from 'node:fs/promises'
+import { join, extname } from 'node:path'
+import { tmpdir } from 'node:os'
 import winston from 'winston'
 import { selectNextPrinter, getPrinterByName, getPrinterPool } from './manager'
 import type { PrinterInfo } from './manager'
@@ -123,8 +124,9 @@ function resolvePageSize(
 // ---------------------------------------------------------------------------
 
 async function executePrint(job: PrintJob): Promise<boolean> {
-  // Read the image file into memory as base64 — avoids file:// URL security
-  // restrictions that prevent hidden BrowserWindows from loading local files.
+  // Read the image as base64 and write a temp HTML file that embeds it.
+  // We use a temp file + loadFile() instead of a data: URL because
+  // Chromium has a ~2MB limit on data URL navigation which large images exceed.
   let imageDataUrl: string
   try {
     const buf = await readFile(job.filepath)
@@ -148,6 +150,11 @@ async function executePrint(job: PrintJob): Promise<boolean> {
   <img id="photo" src="${imageDataUrl}" />
 </body></html>`
 
+  // Write to a temp file so loadFile() works without URL length limits
+  const tempDir = await mkdtemp(join(tmpdir(), 'smart-print-'))
+  const tempHtml = join(tempDir, 'print.html')
+  await writeFile(tempHtml, html, 'utf-8')
+
   const printWindow = new BrowserWindow({
     show: false,
     width: 800,
@@ -156,7 +163,7 @@ async function executePrint(job: PrintJob): Promise<boolean> {
   })
 
   try {
-    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    await printWindow.loadFile(tempHtml)
 
     // Wait for the image to finish loading and get its dimensions
     const dimensions: { w: number; h: number } = await printWindow.webContents.executeJavaScript(`
@@ -206,6 +213,8 @@ async function executePrint(job: PrintJob): Promise<boolean> {
     throw err
   } finally {
     printWindow.destroy()
+    // Clean up temp file
+    unlink(tempHtml).catch(() => {})
   }
 }
 

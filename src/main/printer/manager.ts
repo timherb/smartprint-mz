@@ -549,19 +549,33 @@ function ppdToDimensions(name: string): { width: number; height: number } {
 }
 
 async function getWindowsMediaSizes(printerName: string): Promise<PaperSize[]> {
-  // PowerShell query for printer capabilities
-  const cmd = `powershell -NoProfile -Command "Get-PrinterProperty -PrinterName '${printerName.replace(/'/g, "''")}' -PropertyName 'Config:PaperSize' 2>$null | Select-Object -ExpandProperty Value"`
+  // Use .NET System.Drawing.Printing.PrinterSettings.PaperSizes — same API
+  // that C# apps use to enumerate driver-reported paper sizes.
+  const psPrinter = printerName.replace(/'/g, "''")
+  const cmd = `powershell -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Drawing; $ps = New-Object System.Drawing.Printing.PrinterSettings; $ps.PrinterName = '${psPrinter}'; $ps.PaperSizes | ForEach-Object { $_.PaperName + '|' + [Math]::Round($_.Width / 100 * 25.4) + '|' + [Math]::Round($_.Height / 100 * 25.4) }"`
   try {
     const { stdout } = await execAsync(cmd, { timeout: 10000 })
-    const values = stdout.trim().split(/\r?\n/).filter((v) => v.length > 0)
-    if (values.length === 0) return DEFAULT_PAPER_SIZES
-    return values.map((v) => {
-      const dims = ppdToDimensions(v.trim())
-      return { name: v.trim(), width: dims.width, height: dims.height }
+    const lines = stdout.trim().split(/\r?\n/).filter((v) => v.length > 0)
+    if (lines.length === 0) return DEFAULT_PAPER_SIZES
+
+    const sizes: PaperSize[] = lines.map((line) => {
+      const [name, w, h] = line.split('|')
+      return {
+        name: name?.trim() ?? 'Unknown',
+        width: parseInt(w, 10) || 0,
+        height: parseInt(h, 10) || 0
+      }
     })
-  } catch {
-    // Fallback: try WMI
-    logger.info('PowerShell query failed, trying WMI', { printerName })
+
+    logger.info('Windows paper sizes from driver', {
+      printerName,
+      count: sizes.length,
+      sizes: sizes.map((s) => s.name)
+    })
+
+    return sizes.length > 0 ? sizes : DEFAULT_PAPER_SIZES
+  } catch (err) {
+    logger.warn('Failed to query Windows paper sizes', { printerName, error: (err as Error).message })
     return DEFAULT_PAPER_SIZES
   }
 }

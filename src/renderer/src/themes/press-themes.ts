@@ -65,7 +65,7 @@ export interface PressThemeColors {
   isLight: boolean
 }
 
-export type PressThemeName = 'gunmetal' | 'silver' | 'brass' | 'military'
+export type PressThemeName = 'gunmetal' | 'silver' | 'champagne' | 'teal' | 'emerald' | 'brass' | 'military'
 
 export const PRESS_THEMES: Record<PressThemeName, PressThemeColors> = {
   // --------------------------------------------------------------------------
@@ -175,7 +175,166 @@ export const PRESS_THEMES: Record<PressThemeName, PressThemeColors> = {
   },
 
   // --------------------------------------------------------------------------
-  // 3. Aged Brass (warm dark)
+  // 3. Champagne Silver (warm rose-gold silver)
+  // --------------------------------------------------------------------------
+  champagne: {
+    baseDark: '#d8d2cc',
+    baseMid: '#e6e0da',
+    baseLight: '#f0ece8',
+
+    accent: '#c57d3c',
+    accentLight: '#d4935a',
+    accentDark: '#a5632e',
+    accentGlow: 'rgba(197,125,60,',
+
+    paper: '#faf8f5',
+    paperDark: '#f2efe9',
+    paperBorder: '#e0dbd4',
+    textOnPaper: '#2a2420',
+    textOnPaperMuted: '#8b7e72',
+
+    textPrimary: '#2a2420',
+    textMuted: '#7a6e62',
+
+    borderColor: 'rgba(120,100,80,0.15)',
+    borderDark: '#ccc6be',
+
+    shadowColor: 'rgba(80,60,40,',
+    insetShadowColor: 'rgba(80,60,40,',
+    highlightColor: 'rgba(255,252,248,',
+
+    ledGreen: '#16a34a',
+    ledAmber: '#d97706',
+    ledRed: '#dc2626',
+
+    rivetLight: '#c4bcb4',
+    rivetDark: '#a8a098',
+
+    metalSpotColor: 'rgba(160,148,132,',
+
+    placeholderColor: '#b8b0a6',
+
+    navTabActiveFrom: '#f2ede8',
+    navTabActiveTo: '#e6e0d8',
+
+    knobOnFrom: '#dda87a',
+    knobOnTo: '#c88c5e',
+    knobOffFrom: '#c4bcb4',
+    knobOffTo: '#b4aca4',
+    knobGripOn: 'rgba(165,99,46,0.4)',
+    knobGripOff: 'rgba(130,118,106,0.4)',
+
+    isLight: true,
+  },
+
+  // --------------------------------------------------------------------------
+  // 4. Silver Teal (cool silver + teal accents, high contrast)
+  // --------------------------------------------------------------------------
+  teal: {
+    baseDark: '#d4d8dc',
+    baseMid: '#e2e6ea',
+    baseLight: '#eef0f2',
+
+    accent: '#0d9488',
+    accentLight: '#14b8a6',
+    accentDark: '#0f766e',
+    accentGlow: 'rgba(13,148,136,',
+
+    paper: '#f8fafb',
+    paperDark: '#f0f3f5',
+    paperBorder: '#dce0e4',
+    textOnPaper: '#1a1a2e',
+    textOnPaperMuted: '#5f6b7a',
+
+    textPrimary: '#1a1a2e',
+    textMuted: '#5f6b7a',
+
+    borderColor: 'rgba(0,0,0,0.12)',
+    borderDark: '#c4c8cc',
+
+    shadowColor: 'rgba(0,0,0,',
+    insetShadowColor: 'rgba(0,10,20,',
+    highlightColor: 'rgba(255,255,255,',
+
+    ledGreen: '#16a34a',
+    ledAmber: '#d97706',
+    ledRed: '#dc2626',
+
+    rivetLight: '#bcc0c4',
+    rivetDark: '#9ca0a4',
+
+    metalSpotColor: 'rgba(175,180,188,',
+
+    placeholderColor: '#a8aeb4',
+
+    navTabActiveFrom: '#f2f5f7',
+    navTabActiveTo: '#e4e8ec',
+
+    knobOnFrom: '#5ec8be',
+    knobOnTo: '#3aaa9e',
+    knobOffFrom: '#c0c4c8',
+    knobOffTo: '#b0b4b8',
+    knobGripOn: 'rgba(15,118,110,0.4)',
+    knobGripOff: 'rgba(120,124,130,0.4)',
+
+    isLight: true,
+  },
+
+  // --------------------------------------------------------------------------
+  // 5. Silver Emerald (green-warm silver + emerald accents)
+  // --------------------------------------------------------------------------
+  emerald: {
+    baseDark: '#d6d9d4',
+    baseMid: '#e4e7e2',
+    baseLight: '#eef0ec',
+
+    accent: '#059669',
+    accentLight: '#10b981',
+    accentDark: '#047857',
+    accentGlow: 'rgba(5,150,105,',
+
+    paper: '#f9faf8',
+    paperDark: '#f0f2ee',
+    paperBorder: '#dce0d8',
+    textOnPaper: '#1a2e1a',
+    textOnPaperMuted: '#5f7060',
+
+    textPrimary: '#1a2e1a',
+    textMuted: '#5f7060',
+
+    borderColor: 'rgba(0,0,0,0.11)',
+    borderDark: '#c4c8c0',
+
+    shadowColor: 'rgba(10,20,10,',
+    insetShadowColor: 'rgba(10,20,10,',
+    highlightColor: 'rgba(252,255,250,',
+
+    ledGreen: '#10b981',
+    ledAmber: '#d97706',
+    ledRed: '#dc2626',
+
+    rivetLight: '#bcc0b8',
+    rivetDark: '#9ca09a',
+
+    metalSpotColor: 'rgba(170,178,166,',
+
+    placeholderColor: '#a8b0a4',
+
+    navTabActiveFrom: '#f0f4ee',
+    navTabActiveTo: '#e2e8de',
+
+    knobOnFrom: '#5dd4a8',
+    knobOnTo: '#38b88e',
+    knobOffFrom: '#bcc0b8',
+    knobOffTo: '#acb0a8',
+    knobGripOn: 'rgba(4,120,87,0.4)',
+    knobGripOff: 'rgba(110,118,106,0.4)',
+
+    isLight: true,
+  },
+
+  // --------------------------------------------------------------------------
+  // 6. Aged Brass (warm dark)
   // --------------------------------------------------------------------------
   brass: {
     baseDark: '#1c1915',
@@ -228,7 +387,7 @@ export const PRESS_THEMES: Record<PressThemeName, PressThemeColors> = {
   },
 
   // --------------------------------------------------------------------------
-  // 4. Military (olive/tactical)
+  // 7. Military (olive/tactical)
   // --------------------------------------------------------------------------
   military: {
     baseDark: '#1a1f16',
@@ -281,11 +440,14 @@ export const PRESS_THEMES: Record<PressThemeName, PressThemeColors> = {
   },
 }
 
-export const PRESS_THEME_NAMES: PressThemeName[] = ['gunmetal', 'silver', 'brass', 'military']
+export const PRESS_THEME_NAMES: PressThemeName[] = ['gunmetal', 'silver', 'champagne', 'teal', 'emerald', 'brass', 'military']
 
 export const PRESS_THEME_LABELS: Record<PressThemeName, string> = {
   gunmetal: 'Gunmetal',
   silver: 'Brushed Silver',
+  champagne: 'Champagne Silver',
+  teal: 'Silver Teal',
+  emerald: 'Silver Emerald',
   brass: 'Aged Brass',
   military: 'Military',
 }
@@ -294,6 +456,9 @@ export const PRESS_THEME_LABELS: Record<PressThemeName, string> = {
 export const PRESS_THEME_SWATCHES: Record<PressThemeName, { base: string; accent: string }> = {
   gunmetal: { base: '#22262b', accent: '#cd853f' },
   silver: { base: '#e2e6ea', accent: '#3b82f6' },
+  champagne: { base: '#e6e0da', accent: '#c57d3c' },
+  teal: { base: '#e2e6ea', accent: '#0d9488' },
+  emerald: { base: '#e4e7e2', accent: '#059669' },
   brass: { base: '#252019', accent: '#c9a84c' },
   military: { base: '#232b1e', accent: '#f59e0b' },
 }

@@ -6,8 +6,8 @@
  */
 
 import { BrowserWindow } from 'electron'
-import { readFile, writeFile, unlink, mkdtemp } from 'node:fs/promises'
-import { join, extname } from 'node:path'
+import { writeFile, unlink, mkdtemp } from 'node:fs/promises'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import winston from 'winston'
 import { selectNextPrinter, getPrinterByName, getPrinterPool } from './manager'
@@ -124,18 +124,13 @@ function resolvePageSize(
 // ---------------------------------------------------------------------------
 
 async function executePrint(job: PrintJob): Promise<boolean> {
-  // Read the image as base64 and write a temp HTML file that embeds it.
-  // We use a temp file + loadFile() instead of a data: URL because
-  // Chromium has a ~2MB limit on data URL navigation which large images exceed.
-  let imageDataUrl: string
-  try {
-    const buf = await readFile(job.filepath)
-    const ext = extname(job.filepath).toLowerCase()
-    const mime = ext === '.png' ? 'image/png' : 'image/jpeg'
-    imageDataUrl = `data:${mime};base64,${buf.toString('base64')}`
-  } catch {
-    throw new Error(`Image file not found or not readable: ${job.filepath}`)
-  }
+  // Build a file:// URL for the image. The hidden window uses webSecurity:false
+  // so it can load local file:// resources without CORS restrictions.
+  // Windows paths need three slashes: file:///C:/path/to/file.png
+  const normalizedPath = job.filepath.replace(/\\/g, '/')
+  const fileUrl = normalizedPath.startsWith('/')
+    ? `file://${normalizedPath}`
+    : `file:///${normalizedPath}`
 
   const pageSize = resolvePageSize(job.options.paperSize)
 
@@ -147,10 +142,11 @@ async function executePrint(job: PrintJob): Promise<boolean> {
   body { display: flex; align-items: center; justify-content: center; background: #fff; }
   img { width: 100%; height: 100%; object-fit: cover; }
 </style></head><body>
-  <img id="photo" src="${imageDataUrl}" />
+  <img id="photo" />
 </body></html>`
 
-  // Write to a temp file so loadFile() works without URL length limits
+  // Write a minimal HTML file (no embedded image data) and load via loadFile.
+  // The image is loaded separately via file:// URL with webSecurity disabled.
   const tempDir = await mkdtemp(join(tmpdir(), 'smart-print-'))
   const tempHtml = join(tempDir, 'print.html')
   await writeFile(tempHtml, html, 'utf-8')
@@ -159,24 +155,32 @@ async function executePrint(job: PrintJob): Promise<boolean> {
     show: false,
     width: 800,
     height: 600,
-    webPreferences: { offscreen: false }
+    webPreferences: {
+      webSecurity: false,
+      offscreen: false
+    }
   })
 
   try {
     await printWindow.loadFile(tempHtml)
 
-    // Wait for the image to finish loading and get its dimensions
+    // Set the image src and wait for it to load. Using executeJavaScript
+    // to set src avoids embedding large base64 in the HTML file.
     const dimensions: { w: number; h: number } = await printWindow.webContents.executeJavaScript(`
       new Promise((resolve, reject) => {
         const img = document.getElementById('photo');
-        if (img.complete && img.naturalWidth > 0) {
-          resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        } else {
-          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-          img.onerror = () => reject(new Error('Image failed to load in print window'));
-        }
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = (e) => reject(new Error('Image failed to load: ' + '${fileUrl}'));
+        img.src = '${fileUrl}';
       })
     `)
+
+    logger.info('Image loaded for printing', {
+      jobId: job.id,
+      width: dimensions.w,
+      height: dimensions.h,
+      printer: job.printerName
+    })
 
     // Auto-detect landscape from image dimensions unless explicitly set
     const landscape = job.options.landscape ?? (dimensions.w > dimensions.h)
@@ -199,6 +203,8 @@ async function executePrint(job: PrintJob): Promise<boolean> {
               printer: job.printerName,
               reason: failureReason
             })
+          } else {
+            logger.info('Print succeeded', { jobId: job.id, printer: job.printerName })
           }
           resolve(success)
         }
@@ -213,7 +219,6 @@ async function executePrint(job: PrintJob): Promise<boolean> {
     throw err
   } finally {
     printWindow.destroy()
-    // Clean up temp file
     unlink(tempHtml).catch(() => {})
   }
 }

@@ -65,7 +65,7 @@ export interface PressThemeColors {
   isLight: boolean
 }
 
-export type PressThemeName = 'gunmetal' | 'silver' | 'champagne' | 'teal' | 'emerald' | 'brass' | 'military'
+export type PressThemeName = 'gunmetal' | 'silver' | 'champagne' | 'teal' | 'emerald' | 'brass' | 'military' | 'brand'
 
 export const PRESS_THEMES: Record<PressThemeName, PressThemeColors> = {
   // --------------------------------------------------------------------------
@@ -438,9 +438,62 @@ export const PRESS_THEMES: Record<PressThemeName, PressThemeColors> = {
 
     isLight: false,
   },
+
+  // --------------------------------------------------------------------------
+  // 8. Brand (navy + green — matches the Mozeus logo)
+  // --------------------------------------------------------------------------
+  brand: {
+    baseDark: '#1b2a4a',
+    baseMid: '#223458',
+    baseLight: '#2a3f68',
+
+    accent: '#4cb050',
+    accentLight: '#66c46a',
+    accentDark: '#3a8e3e',
+    accentGlow: 'rgba(76,176,80,',
+
+    paper: '#f5f7fa',
+    paperDark: '#eaeff5',
+    paperBorder: '#c8d0dc',
+    textOnPaper: '#1a2444',
+    textOnPaperMuted: '#4a5a74',
+
+    textPrimary: '#d0d8e8',
+    textMuted: '#7a8aa4',
+
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderDark: '#172240',
+
+    shadowColor: 'rgba(0,10,30,',
+    insetShadowColor: 'rgba(0,8,24,',
+    highlightColor: 'rgba(180,200,240,',
+
+    ledGreen: '#4cb050',
+    ledAmber: '#f59e0b',
+    ledRed: '#ef4444',
+
+    rivetLight: '#3a4f78',
+    rivetDark: '#152038',
+
+    metalSpotColor: 'rgba(42,63,104,',
+
+    placeholderColor: '#5a6a88',
+
+    navTabActiveFrom: '#2a3f68',
+    navTabActiveTo: '#223458',
+
+    knobOnFrom: '#66c46a',
+    knobOnTo: '#4cb050',
+    knobOffFrom: '#2a3f68',
+    knobOffTo: '#1b2a4a',
+    knobGripOn: 'rgba(76,176,80,0.4)',
+    knobGripOff: 'rgba(42,63,104,0.6)',
+
+    isLight: false,
+  },
 }
 
-export const PRESS_THEME_NAMES: PressThemeName[] = ['gunmetal', 'silver', 'champagne', 'teal', 'emerald', 'brass', 'military']
+export const PRESS_THEME_NAMES: PressThemeName[] = ['gunmetal', 'silver', 'champagne', 'teal', 'emerald', 'brass', 'military', 'brand']
 
 export const PRESS_THEME_LABELS: Record<PressThemeName, string> = {
   gunmetal: 'Gunmetal',
@@ -450,6 +503,7 @@ export const PRESS_THEME_LABELS: Record<PressThemeName, string> = {
   emerald: 'Silver Emerald',
   brass: 'Aged Brass',
   military: 'Military',
+  brand: 'Mozeus',
 }
 
 // Preview swatch colors (base + accent) for theme picker
@@ -461,4 +515,5 @@ export const PRESS_THEME_SWATCHES: Record<PressThemeName, { base: string; accent
   emerald: { base: '#e4e7e2', accent: '#059669' },
   brass: { base: '#252019', accent: '#c9a84c' },
   military: { base: '#232b1e', accent: '#f59e0b' },
+  brand: { base: '#1b2a4a', accent: '#4cb050' },
 }

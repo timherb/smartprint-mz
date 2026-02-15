@@ -100,24 +100,18 @@ function generateJobId(): string {
   return `pj-${Date.now()}-${jobCounter}`
 }
 
+/*
 function resolvePageSize(
   sizeName?: string
 ): 'A0' | 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'A6' | 'Legal' | 'Letter' | 'Tabloid' | undefined {
   if (!sizeName) return undefined
   const map: Record<string, 'A0' | 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'A6' | 'Legal' | 'Letter' | 'Tabloid'> = {
-    a0: 'A0',
-    a1: 'A1',
-    a2: 'A2',
-    a3: 'A3',
-    a4: 'A4',
-    a5: 'A5',
-    a6: 'A6',
-    legal: 'Legal',
-    letter: 'Letter',
-    tabloid: 'Tabloid'
+    a0: 'A0', a1: 'A1', a2: 'A2', a3: 'A3', a4: 'A4', a5: 'A5', a6: 'A6',
+    legal: 'Legal', letter: 'Letter', tabloid: 'Tabloid'
   }
   return map[sizeName.toLowerCase()] ?? undefined
 }
+*/
 
 // ---------------------------------------------------------------------------
 // Core printing
@@ -132,7 +126,8 @@ async function executePrint(job: PrintJob): Promise<boolean> {
     ? `file://${normalizedPath}`
     : `file:///${normalizedPath}`
 
-  const pageSize = resolvePageSize(job.options.paperSize)
+  // pageSize disabled for debugging — letting driver use its default
+  // const pageSize = resolvePageSize(job.options.paperSize)
 
   const html = `<!DOCTYPE html>
 <html><head><style>
@@ -152,7 +147,7 @@ async function executePrint(job: PrintJob): Promise<boolean> {
   await writeFile(tempHtml, html, 'utf-8')
 
   const printWindow = new BrowserWindow({
-    show: false,
+    show: true, // Visible for debugging — will hide once printing works
     width: 800,
     height: 600,
     webPreferences: {
@@ -188,13 +183,12 @@ async function executePrint(job: PrintJob): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       printWindow.webContents.print(
         {
-          silent: job.options.silent ?? true,
+          silent: false, // Show print dialog for debugging
           printBackground: true,
           deviceName: job.printerName,
           color: job.options.color ?? true,
           copies: job.options.copies ?? 1,
-          landscape,
-          ...(pageSize ? { pageSize } : {})
+          landscape
         },
         (success, failureReason) => {
           if (!success) {

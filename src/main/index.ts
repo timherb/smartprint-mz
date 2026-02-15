@@ -107,7 +107,7 @@ setupCloudWatcherEvents()
 
 function createWindow(): void {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
-  const winWidth = Math.max(1366, Math.round(screenW * 0.55))
+  const winWidth = Math.max(1366, Math.round(screenW * 0.6))
   const winHeight = Math.max(768, Math.round(screenH * 0.8))
 
   mainWindowRef = new BrowserWindow({
@@ -167,7 +167,7 @@ app.whenReady().then(() => {
       localDirectory: '',
       cloudApiUrl: '',
       cloudRegistered: false,
-      pollInterval: 5000,
+      pollInterval: 60000,
       healthInterval: 30000,
       logLevel: 'info',
       paperSize: '',

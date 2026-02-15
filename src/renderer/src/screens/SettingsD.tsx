@@ -19,15 +19,11 @@ import {
   HardDrive,
   Printer,
   CheckCircle2,
-  Eye,
-  EyeOff,
   RefreshCw,
   Save,
   Check,
   RotateCcw,
   Clock,
-  Sun,
-  Moon,
   Wifi,
   WifiOff,
   AlertTriangle,
@@ -67,9 +63,6 @@ function mapPrinterStatus(apiStatus: string): PrinterStatus {
 const FILE_FORMATS = [
   { ext: 'JPG', enabled: true },
   { ext: 'PNG', enabled: true },
-  { ext: 'TIFF', enabled: false },
-  { ext: 'BMP', enabled: false },
-  { ext: 'HEIC', enabled: true },
 ] as const
 
 const PAPER_SIZES: { value: PaperSize; label: string }[] = [
@@ -209,67 +202,6 @@ function FieldHint({ children, colors }: { children: React.ReactNode; colors: Pr
 // Industrial rocker toggle switch
 // ---------------------------------------------------------------------------
 
-function RockerSwitch({
-  checked,
-  onChange,
-  colors,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  colors: PressThemeColors
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="relative inline-flex h-7 w-14 shrink-0 items-center rounded transition-all duration-200 focus-visible:outline-none"
-      style={
-        checked
-          ? {
-              background: `linear-gradient(to bottom, ${colors.accent}, ${colors.accentDark})`,
-              boxShadow: `inset 0 1px 0 ${colors.highlightColor}0.15), 0 2px 4px ${colors.shadowColor}0.3)`,
-            }
-          : {
-              ...insetPanelStyle(colors),
-            }
-      }
-    >
-      {/* Track labels */}
-      <span
-        className="absolute left-2 text-[8px] font-bold uppercase tracking-wider"
-        style={{ color: checked ? 'rgba(255,255,255,0.7)' : 'transparent' }}
-      >
-        ON
-      </span>
-      <span
-        className="absolute right-1.5 text-[8px] font-bold uppercase tracking-wider"
-        style={{ color: checked ? 'transparent' : colors.textMuted }}
-      >
-        OFF
-      </span>
-      {/* Knob */}
-      <span
-        className="inline-block h-5 w-5 rounded-sm transition-transform duration-200"
-        style={{
-          transform: checked ? 'translateX(33px)' : 'translateX(3px)',
-          background: checked
-            ? `linear-gradient(to bottom, ${colors.knobOnFrom}, ${colors.knobOnTo})`
-            : `linear-gradient(to bottom, ${colors.knobOffFrom}, ${colors.knobOffTo})`,
-          boxShadow: `0 2px 4px ${colors.shadowColor}0.4), inset 0 1px 0 ${colors.highlightColor}0.1)`,
-        }}
-      >
-        {/* Grip lines on knob */}
-        <span className="absolute inset-x-1.5 top-[7px] flex flex-col gap-[2px]">
-          <span className="h-px rounded-full" style={{ backgroundColor: checked ? colors.knobGripOn : colors.knobGripOff }} />
-          <span className="h-px rounded-full" style={{ backgroundColor: checked ? colors.knobGripOn : colors.knobGripOff }} />
-          <span className="h-px rounded-full" style={{ backgroundColor: checked ? colors.knobGripOn : colors.knobGripOff }} />
-        </span>
-      </span>
-    </button>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Industrial select
@@ -398,24 +330,22 @@ function MetalStepper({
 function RegistrationKeyInput({
   value,
   onChange,
-  showKey,
   colors,
 }: {
   value: string
   onChange: (v: string) => void
-  showKey: boolean
   colors: PressThemeColors
 }): React.JSX.Element {
-  const segments = [value.slice(0, 4), value.slice(4, 8), value.slice(8, 12)]
-  const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
+  const segments = [value.slice(0, 3), value.slice(3, 6), value.slice(6, 9), value.slice(9, 12)]
+  const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
 
   const handleSegmentChange = useCallback(
     (index: number, raw: string) => {
-      const cleaned = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4)
+      const cleaned = raw.replace(/\D/g, '').slice(0, 3)
       const newSegments = [...segments]
       newSegments[index] = cleaned
       onChange(newSegments.join(''))
-      if (cleaned.length === 4 && index < 2) refs[index + 1].current?.focus()
+      if (cleaned.length === 3 && index < 3) refs[index + 1].current?.focus()
     },
     [segments, onChange, refs],
   )
@@ -436,16 +366,14 @@ function RegistrationKeyInput({
           {i > 0 && <span className="text-sm select-none" style={{ color: colors.textMuted }}>&ndash;</span>}
           <input
             ref={refs[i]}
-            type={showKey ? 'text' : 'password'}
+            type="text"
+            inputMode="numeric"
             value={seg}
             onChange={(e) => handleSegmentChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
-            maxLength={4}
-            placeholder="0000"
-            className={cn(
-              'h-10 w-[4.5rem] rounded text-center text-xs tracking-[0.2em] outline-none transition-all duration-200',
-              !showKey && 'tracking-normal',
-            )}
+            maxLength={3}
+            placeholder="000"
+            className="h-10 w-14 rounded text-center text-xs tracking-[0.2em] outline-none transition-all duration-200"
             style={{
               ...insetPanelStyle(colors),
               ...monoFont,
@@ -558,7 +486,7 @@ function ThemePickerRow({ colors }: { colors: PressThemeColors }): React.JSX.Ele
 // ---------------------------------------------------------------------------
 
 export default function SettingsD(): React.JSX.Element {
-  const { theme, toggle: toggleTheme } = useTheme()
+  useTheme() // subscribe
   const c = usePressTheme()
 
   // Settings store
@@ -566,8 +494,6 @@ export default function SettingsD(): React.JSX.Element {
   const setMode = useSettings((s) => s.setMode)
   const localDirectory = useSettings((s) => s.localDirectory)
   const setLocalDirectory = useSettings((s) => s.setLocalDirectory)
-  const cloudApiUrl = useSettings((s) => s.cloudApiUrl)
-  const setCloudApiUrl = useSettings((s) => s.setCloudApiUrl)
   const pollIntervalMs = useSettings((s) => s.pollInterval)
   const setPollIntervalMs = useSettings((s) => s.setPollInterval)
   const healthIntervalMs = useSettings((s) => s.healthInterval)
@@ -602,7 +528,6 @@ export default function SettingsD(): React.JSX.Element {
   )
   const [maxFileSize, setMaxFileSize] = useState(50)
   const [registrationKey, setRegistrationKey] = useState('')
-  const [showKey, setShowKey] = useState(false)
   const [connectionTest, setConnectionTest] = useState<ConnectionTestState>('idle')
   const paperSize = useSettings((s) => s.paperSize)
   const setPaperSize = useSettings((s) => s.setPaperSize)
@@ -699,8 +624,7 @@ export default function SettingsD(): React.JSX.Element {
   function handleReset(): void {
     setMode('local')
     setLocalDirectory('')
-    setCloudApiUrl('')
-    setPollIntervalMs(5000)
+    setPollIntervalMs(60000)
     setHealthIntervalMs(30000)
     setLogLevel('info')
     setEnabledFormats(new Set(FILE_FORMATS.filter((f) => f.enabled).map((f) => f.ext)))
@@ -767,7 +691,7 @@ export default function SettingsD(): React.JSX.Element {
               <SectionHeader
                 icon={HardDrive}
                 title="PHOTO SOURCE"
-                description="Choose how Smart Print discovers new photos. Local watches a folder; Cloud connects to a remote API."
+                description="Choose how Smart Print discovers new photos."
                 colors={c}
               />
 
@@ -821,9 +745,9 @@ export default function SettingsD(): React.JSX.Element {
                     </div>
                   </div>
                   <div className="relative">
-                    <p className="text-sm font-bold" style={{ color: c.textPrimary }}>LOCAL FOLDER</p>
+                    <p className="text-sm font-bold" style={{ color: c.textPrimary }}>LOCAL PRINT</p>
                     <p className="mt-1 text-xs leading-relaxed" style={{ color: c.textMuted }}>
-                      Watch a directory for new images. Best for on-site printing.
+                      Watch a directory for new images. Best for FTP and Hardwired Printing.
                     </p>
                   </div>
                 </button>
@@ -875,9 +799,9 @@ export default function SettingsD(): React.JSX.Element {
                     </div>
                   </div>
                   <div className="relative">
-                    <p className="text-sm font-bold" style={{ color: c.textPrimary }}>CLOUD SERVICE</p>
+                    <p className="text-sm font-bold" style={{ color: c.textPrimary }}>CLOUD PRINT</p>
                     <p className="mt-1 text-xs leading-relaxed" style={{ color: c.textMuted }}>
-                      Receive photos from a remote API. Ideal for multi-location workflows.
+                      Receive photos from the Cloud. Best for Microsite Submitted Photos.
                     </p>
                   </div>
                 </button>
@@ -969,19 +893,10 @@ export default function SettingsD(): React.JSX.Element {
                             <CheckCircle2 className="h-3 w-3" /> REGISTERED
                           </span>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setShowKey(!showKey)}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition"
-                          style={{ color: c.textMuted }}
-                        >
-                          {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                          {showKey ? 'HIDE' : 'SHOW'}
-                        </button>
                       </div>
                     </div>
                     <div className="flex items-end gap-3">
-                      <RegistrationKeyInput value={registrationKey} onChange={setRegistrationKey} showKey={showKey} colors={c} />
+                      <RegistrationKeyInput value={registrationKey} onChange={setRegistrationKey} colors={c} />
                       {!cloudRegistered && (
                         <button
                           type="button"
@@ -998,19 +913,7 @@ export default function SettingsD(): React.JSX.Element {
                         </button>
                       )}
                     </div>
-                    <FieldHint colors={c}>12-character key from your administrator. Format: XXXX-XXXX-XXXX.</FieldHint>
-                  </div>
-                  <div className="relative">
-                    <FieldLabel htmlFor="api-d" colors={c}>API ENDPOINT</FieldLabel>
-                    <input
-                      id="api-d"
-                      type="url"
-                      value={cloudApiUrl}
-                      onChange={(e) => setCloudApiUrl(e.target.value)}
-                      className="h-9 w-full rounded px-3 text-xs outline-none transition-all duration-200"
-                      style={{ ...insetPanelStyle(c), ...monoFont, color: c.textPrimary }}
-                      placeholder="https://api.example.com/v2"
-                    />
+                    <FieldHint colors={c}>12-digit code from your administrator. Format: 000-000-000-000.</FieldHint>
                   </div>
                   <div className="flex items-center gap-4 relative">
                     <button
@@ -1283,29 +1186,6 @@ export default function SettingsD(): React.JSX.Element {
                     >
                       +
                     </button>
-                  </div>
-                </div>
-
-                {/* Appearance - industrial rocker switch */}
-                <div className="relative flex items-center justify-between p-4" style={metalPanelStyle(c)}>
-                  <PanelRivets colors={c} />
-                  <div className="flex items-center gap-3 relative">
-                    {theme === 'dark' ? (
-                      <Moon className="h-3.5 w-3.5" style={{ color: c.accent }} />
-                    ) : (
-                      <Sun className="h-3.5 w-3.5" style={{ color: c.accent }} />
-                    )}
-                    <div>
-                      <p className="text-xs font-bold" style={{ color: c.textPrimary }}>APPEARANCE</p>
-                      <p className="text-[10px]" style={{ color: c.textMuted }}>
-                        {theme === 'dark' ? 'Dark mode active' : 'Light mode active'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Sun className="h-3.5 w-3.5" style={{ color: theme === 'light' ? c.accent : c.textMuted }} />
-                    <RockerSwitch checked={theme === 'dark'} onChange={toggleTheme} colors={c} />
-                    <Moon className="h-3.5 w-3.5" style={{ color: theme === 'dark' ? c.accent : c.textMuted }} />
                   </div>
                 </div>
 

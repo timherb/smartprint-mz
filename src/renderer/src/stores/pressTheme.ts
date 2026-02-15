@@ -10,7 +10,7 @@ interface PressThemeState {
 export const usePressThemeStore = create<PressThemeState>()(
   persist(
     (set) => ({
-      theme: 'gunmetal',
+      theme: 'brand',
       setTheme: (theme: PressThemeName) => set({ theme }),
     }),
     {

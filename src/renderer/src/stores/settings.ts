@@ -67,7 +67,7 @@ export const useSettings = create<SettingsState>()(
       localDirectory: '',
       cloudApiUrl: '',
       cloudRegistered: false,
-      pollInterval: 5000,
+      pollInterval: 60000,
       healthInterval: 30000,
       logLevel: 'info',
       paperSize: '',

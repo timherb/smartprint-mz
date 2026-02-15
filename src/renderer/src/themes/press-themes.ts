@@ -493,7 +493,7 @@ export const PRESS_THEMES: Record<PressThemeName, PressThemeColors> = {
   },
 }
 
-export const PRESS_THEME_NAMES: PressThemeName[] = ['gunmetal', 'silver', 'champagne', 'teal', 'emerald', 'brass', 'military', 'brand']
+export const PRESS_THEME_NAMES: PressThemeName[] = ['brand', 'teal']
 
 export const PRESS_THEME_LABELS: Record<PressThemeName, string> = {
   gunmetal: 'Gunmetal',

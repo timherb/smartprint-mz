@@ -86,8 +86,6 @@ interface PrinterEventDTO {
 }
 
 const api = {
-  ping: (): Promise<string> => ipcRenderer.invoke('ping'),
-
   // App: set window title
   setWindowTitle: (title: string): void => {
     ipcRenderer.send('app:set-title', title)

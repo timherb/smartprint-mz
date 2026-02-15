@@ -627,30 +627,24 @@ function DetailModal({
 export default function GalleryD(): React.JSX.Element {
   const c = usePressTheme()
 
-  const galleryStore = useGallery()
-  const photos = galleryStore.photos
+  const photos = useGallery((s) => s.photos)
+  const scanPrintedFolder = useGallery((s) => s.scanPrintedFolder)
+  const galleryRefresh = useGallery((s) => s.refresh)
   const submitJob = usePrinter((s) => s.submitJob)
   const completedCount = usePrinter((s) => s.queueStats.completed)
-  const subscribeToEvents = usePrinter((s) => s.subscribeToEvents)
   const localDirectory = useSettings((s) => s.localDirectory)
   const copies = useSettings((s) => s.copies)
 
-  // Scan on mount
+  // Scan on mount (event subscription is handled by AppLayoutD)
   useEffect(() => {
-    if (localDirectory) galleryStore.scanPrintedFolder(localDirectory)
-  }, [localDirectory])
-
-  // Subscribe to events
-  useEffect(() => {
-    const unsubscribe = subscribeToEvents()
-    return unsubscribe
-  }, [subscribeToEvents])
+    if (localDirectory) scanPrintedFolder(localDirectory)
+  }, [localDirectory, scanPrintedFolder])
 
   // Auto-refresh on new completions
   const prevCompletedRef = useRef(completedCount)
   useEffect(() => {
     if (completedCount > prevCompletedRef.current) {
-      const timer = setTimeout(() => galleryStore.refresh(), 1500)
+      const timer = setTimeout(() => galleryRefresh(), 1500)
       prevCompletedRef.current = completedCount
       return () => clearTimeout(timer)
     }

@@ -55,20 +55,35 @@ let lastKnownStatuses: Map<string, PrinterStatus> = new Map()
 const HEALTH_CHECK_INTERVAL_MS = 30_000 // 30 seconds
 
 // ---------------------------------------------------------------------------
+// Main window reference
+// ---------------------------------------------------------------------------
+
+let mainWindowRef: BrowserWindow | null = null
+
+/**
+ * Set the main window reference for event emission.
+ * Must be called once after creating the main BrowserWindow.
+ */
+export function setHealthMainWindowRef(win: BrowserWindow): void {
+  mainWindowRef = win
+}
+
+// ---------------------------------------------------------------------------
 // Event emission
 // ---------------------------------------------------------------------------
 
 /**
- * Send a printer-related event to all renderer windows.
+ * Send a printer-related event to the main renderer window.
+ * Uses a stored window reference to avoid the getAllWindows() pitfall
+ * where hidden print windows can intercept events.
  */
 export function emitPrinterEvent(type: string, data: Record<string, unknown>): void {
   const event: PrinterEvent = { type, data, timestamp: Date.now() }
-  const windows = BrowserWindow.getAllWindows()
-  for (const win of windows) {
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
     try {
-      win.webContents.send('printer:event', event)
+      mainWindowRef.webContents.send('printer:event', event)
     } catch {
-      // Window may have been destroyed
+      // Window may have been destroyed between check and send
     }
   }
 }
@@ -79,10 +94,15 @@ export function emitPrinterEvent(type: string, data: Record<string, unknown>): v
 
 /**
  * Perform a single health check: re-discover printers and compare statuses.
+ *
+ * Uses non-forced discovery by default so the 5-minute cache is respected.
+ * This prevents hammering the OS printer API every 30 seconds which is
+ * wasteful on low-end Windows laptops used at events.
+ * The forceRefresh parameter can be used for explicit user-triggered checks.
  */
-export async function checkHealth(): Promise<QueueHealth> {
+export async function checkHealth(forceRefresh = false): Promise<QueueHealth> {
   try {
-    const printers = await discoverPrinters(true)
+    const printers = await discoverPrinters(forceRefresh)
     return buildHealthReport(printers)
   } catch (error) {
     logger.error('Health check failed', { error: String(error) })
@@ -161,12 +181,13 @@ export async function startHealthMonitor(intervalMs: number = HEALTH_CHECK_INTER
 
   logger.info('Starting printer health monitor', { intervalMs })
 
-  // Run an initial check immediately
-  await checkHealth()
+  // Run an initial check immediately (forced to get fresh data)
+  await checkHealth(true)
 
   healthCheckInterval = setInterval(async () => {
     try {
-      await checkHealth()
+      // Health monitor always forces refresh to detect status changes
+      await checkHealth(true)
     } catch (error) {
       logger.error('Periodic health check error', { error: String(error) })
     }

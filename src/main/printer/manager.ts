@@ -105,6 +105,22 @@ let discoveredPrinters: PrinterInfo[] = []
 let discoveryPromise: Promise<PrinterInfo[]> | null = null
 let printerPool: string[] = [] // names of printers in the active pool
 
+/**
+ * Stored reference to the main BrowserWindow.
+ * Set via setMainWindowRef() from the main process entry point.
+ * Avoids the BrowserWindow.getAllWindows()[0] pitfall where hidden
+ * print windows can be picked up instead of the main window.
+ */
+let mainWindowRef: BrowserWindow | null = null
+
+/**
+ * Set the main window reference for printer discovery.
+ * Must be called once after creating the main BrowserWindow.
+ */
+export function setMainWindowRef(win: BrowserWindow): void {
+  mainWindowRef = win
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -309,9 +325,9 @@ async function performDiscovery(): Promise<PrinterInfo[]> {
   logger.info('Starting printer discovery...')
 
   try {
-    const win = BrowserWindow.getAllWindows()[0]
+    const win = mainWindowRef && !mainWindowRef.isDestroyed() ? mainWindowRef : null
     if (!win) {
-      logger.warn('No BrowserWindow available for printer discovery, returning cached data')
+      logger.warn('No main BrowserWindow available for printer discovery, returning cached data')
       return loadCachedPrinters()
     }
 

@@ -83,12 +83,41 @@ const jobs: Map<string, PrintJob> = new Map()
 let jobCounter = 0
 const MAX_RETRIES = 2
 
+/**
+ * Maximum number of finished jobs to keep in memory.
+ * When exceeded, the oldest completed/failed/cancelled jobs are evicted
+ * automatically to prevent unbounded memory growth at events.
+ */
+const MAX_FINISHED_JOBS = 200
+
 /** Optional callback invoked when a print job completes or is cancelled. */
 let _onJobDone: ((job: PrintJob) => void) | null = null
 
 /** Register a callback to run after a job completes (success/fail) or is cancelled. */
 export function setOnJobDone(cb: (job: PrintJob) => void): void {
   _onJobDone = cb
+}
+
+/**
+ * Evict the oldest finished jobs when the map exceeds the cap.
+ * Keeps active (pending/printing) jobs and the most recent finished ones.
+ */
+function evictOldFinishedJobs(): void {
+  const finished: PrintJob[] = []
+  for (const job of jobs.values()) {
+    if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+      finished.push(job)
+    }
+  }
+  if (finished.length <= MAX_FINISHED_JOBS) return
+
+  // Sort oldest first by completedAt (or createdAt as fallback)
+  finished.sort((a, b) => (a.completedAt ?? a.createdAt) - (b.completedAt ?? b.createdAt))
+  const toRemove = finished.length - MAX_FINISHED_JOBS
+  for (let i = 0; i < toRemove; i++) {
+    jobs.delete(finished[i].id)
+  }
+  logger.info('Evicted old finished jobs', { evicted: toRemove, remaining: jobs.size })
 }
 
 // ---------------------------------------------------------------------------
@@ -99,19 +128,6 @@ function generateJobId(): string {
   jobCounter += 1
   return `pj-${Date.now()}-${jobCounter}`
 }
-
-/*
-function resolvePageSize(
-  sizeName?: string
-): 'A0' | 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'A6' | 'Legal' | 'Letter' | 'Tabloid' | undefined {
-  if (!sizeName) return undefined
-  const map: Record<string, 'A0' | 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'A6' | 'Legal' | 'Letter' | 'Tabloid'> = {
-    a0: 'A0', a1: 'A1', a2: 'A2', a3: 'A3', a4: 'A4', a5: 'A5', a6: 'A6',
-    legal: 'Legal', letter: 'Letter', tabloid: 'Tabloid'
-  }
-  return map[sizeName.toLowerCase()] ?? undefined
-}
-*/
 
 // ---------------------------------------------------------------------------
 // Core printing
@@ -269,6 +285,7 @@ async function printWithFallback(job: PrintJob): Promise<void> {
         emitPrinterEvent('job:status', { jobId: job.id, status: job.status, printer: job.printerName })
         logger.info('Print job completed', { jobId: job.id, printer: job.printerName })
         _onJobDone?.(job)
+        evictOldFinishedJobs()
         return
       }
 
@@ -313,6 +330,7 @@ async function printWithFallback(job: PrintJob): Promise<void> {
   job.error = job.error ?? 'Print failed after all retries'
   emitPrinterEvent('job:status', { jobId: job.id, status: job.status, error: job.error })
   logger.error('Print job failed permanently', { jobId: job.id, error: job.error })
+  evictOldFinishedJobs()
 }
 
 async function findFallbackPrinter(exclude: Set<string>): Promise<PrinterInfo | null> {

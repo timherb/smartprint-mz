@@ -56,7 +56,7 @@ const POLL_INTERVAL = 100
 // ---------------------------------------------------------------------------
 
 const logger = winston.createLogger({
-  level: 'debug',
+  level: 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.printf(({ timestamp, level, message, ...meta }) => {
@@ -65,12 +65,7 @@ const logger = winston.createLogger({
     })
   ),
   transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({
-      filename: 'smart-print-watcher.log',
-      maxsize: 5 * 1024 * 1024,
-      maxFiles: 3
-    })
+    new winston.transports.Console()
   ]
 })
 

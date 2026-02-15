@@ -1,6 +1,80 @@
 # Smart Print - Development Log
 
 ================================================================================
+## 2026-02-15 Session (Windows Testing, Print Pipeline, Design Concept D)
+================================================================================
+
+### Tasks Completed
+- [x] Fixed CI build — TypeScript errors from stale Photo type references after gallery store rewrite
+- [x] Print pipeline: center-crop via `object-fit: cover` (no more white bars on mismatched aspect ratios)
+- [x] Bundled fonts locally — replaced Google Fonts @import with @fontsource packages (Plus Jakarta Sans, JetBrains Mono, DM Sans, IBM Plex Mono). Critical for offline use.
+- [x] Tightened CSP — removed Google Fonts domain whitelisting
+- [x] Added Ctrl+Tab / Ctrl+Shift+Tab page navigation
+- [x] Window sizing — 60% width x 80% height, centered on launch
+- [x] Error boundaries wrapping each screen (Monitor, Gallery, Settings)
+- [x] Live window title — "Smart Print — 3 printing, 12 completed"
+- [x] Gallery auto-refresh when print jobs complete (1.5s delay for file move)
+- [x] App logo wired into build (icon.ico, icon.icns, icon.png for all platforms)
+- [x] NSIS installer target added — fixes 30-60s portable exe extraction on Windows
+- [x] Settings persistence — replaced Zustand localStorage with electron-store via IPC (survives portable builds)
+- [x] Auto-print hardcoded to always enabled, toggle removed from UI
+- [x] **Print pipeline completely rewritten** — Electron's webContents.print() incompatible with DS40 dye-sub driver on Windows. Replaced with PowerShell + .NET System.Drawing.Printing (Windows GDI). macOS/Linux uses `lp` command.
+- [x] Fixed PowerShell quoting — inline script via exec() was silently mangled by cmd.exe. Now writes .ps1 to temp file and executes with `-File` flag.
+- [x] Print confirmed hitting Windows print spooler queue on DS40
+- [x] Paper sizes now queried from Windows driver via .NET PrinterSettings.PaperSizes (same API as C# apps)
+- [x] "Printing Press" skeuomorphic design concept (D) — 4 screens with industrial aesthetic
+- [x] 8 color themes for D concept (Gunmetal, Brushed Silver, Champagne, Teal, Emerald, Brass, Military, Mozeus Brand)
+- [x] Trimmed to 2 active themes: Mozeus (navy+green) and Silver Teal
+- [x] UI cleanup: renamed modes (Local Print / Cloud Print), updated taglines, 4x3 registration input, removed API endpoint field, removed dark/light toggle, removed TIFF/BMP/HEIC formats, poll interval default 60s
+- [x] Developer wiki — 17 pages pushed to Azure DevOps wiki (Architecture, Features, Development, Reference)
+- [ ] Sweeping repo cleanup for performance on low-end devices (in progress)
+
+### Key Decisions
+- **Electron's webContents.print() is broken for dye-sub printers on Windows** — tried data URLs, file URLs, temp HTML files, webSecurity:false, silent:true/false. All fail instantly with the DS40 driver. Root cause: Chromium's print pipeline is incompatible with specialty printer drivers.
+- **PowerShell + .NET GDI is the correct approach** — uses the same System.Drawing.Printing pipeline as native Windows apps. The DS40 driver was designed for GDI, not Chromium.
+- **Temp .ps1 file, not inline PowerShell** — passing scripts via `exec("powershell -Command ...")` gets mangled by cmd.exe quoting. Writing to a temp file and using `-File` flag avoids all escaping issues.
+- **Settings must use electron-store, not localStorage** — portable Electron builds on Windows don't reliably persist localStorage across restarts.
+- **NSIS installer over portable** — portable .exe extracts to temp dir on every launch (30-60s). NSIS installs once to disk. Both artifacts now built by CI.
+- **Design concept D chosen** — skeuomorphic "Printing Press" aesthetic. Mozeus brand theme (navy + green) as default. B3 "Soft Studio" files kept for reference.
+- **Fonts must be local** — the primary use case is offline on a local network. No remote asset dependencies.
+
+### Summary
+First real Windows hardware test with the DS40 dye-sub printer. Discovered and resolved multiple critical issues: Electron's print API is fundamentally incompatible with specialty printer drivers on Windows, settings don't persist in portable builds, and Google Fonts caused 20-30s load delays on offline networks. Rewrote the entire print pipeline to use native OS printing (PowerShell/.NET on Windows, lp on macOS). Built the "Printing Press" skeuomorphic design concept with 8 color themes, settled on Mozeus brand (navy+green) as default. Created comprehensive developer wiki on Azure DevOps. Multiple UI refinements and label changes to match product direction.
+
+### Files Modified
+- src/main/printer/queue.ts — Complete rewrite: PowerShell/.NET GDI printing replaces Electron webContents.print()
+- src/main/printer/manager.ts — Windows paper sizes via .NET PrinterSettings.PaperSizes
+- src/main/index.ts — Settings electron-store, window sizing, poll interval defaults
+- src/preload/index.ts + index.d.ts — Settings IPC, window title IPC, removed unused channels
+- src/renderer/src/App.tsx — Switched to AppLayoutD
+- src/renderer/src/stores/settings.ts — electron-store IPC storage adapter, removed autoPrint toggle, 60s poll default
+- src/renderer/src/stores/pressTheme.ts — NEW: Zustand store for press theme selection
+- src/renderer/src/themes/press-themes.ts — NEW: 8 theme definitions, 2 active
+- src/renderer/src/layouts/AppLayoutD.tsx — NEW: Industrial press layout with theme support
+- src/renderer/src/screens/MonitorD.tsx — NEW: Circular gauges, LED indicators, paper feed queue
+- src/renderer/src/screens/GalleryD.tsx — NEW: Light table photo display
+- src/renderer/src/screens/SettingsD.tsx — NEW: Control panel settings, 4x3 registration, cleaned labels
+- src/renderer/src/components/ErrorBoundary.tsx — NEW: Crash-safe screen wrappers
+- src/renderer/src/assets/main.css — Local @fontsource imports
+- src/renderer/index.html — Tightened CSP
+- electron-builder.yml — Added NSIS target, icon paths
+- build/icon.ico, icon.icns, icon.png — App logo for all platforms
+- Azure DevOps wiki — 17 pages of developer documentation
+
+### Outstanding Items
+- [ ] Confirm physical print quality on DS40 in person (Monday)
+- [ ] Cloud event selection flow (waiting on YAML spec from architecture team)
+- [ ] Sweeping repo cleanup (agent running)
+- [ ] App icon with transparent background (clean up white corners)
+- [ ] Splash screen with new logo
+
+### Next Session
+- Verify DS40 physical output quality and paper sizing
+- Review and merge repo cleanup results
+- Potentially refine Mozeus/Silver Teal themes based on in-person testing
+- Cloud API integration when YAML spec arrives
+
+================================================================================
 ## 2026-02-09 Session 2 (Bug Fixes, Persistence, CI/CD)
 ================================================================================
 

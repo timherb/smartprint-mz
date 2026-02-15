@@ -1,7 +1,7 @@
-import AppLayoutB3 from './layouts/AppLayoutB3'
+import AppLayoutD from './layouts/AppLayoutD'
 
 function App(): React.JSX.Element {
-  return <AppLayoutB3 />
+  return <AppLayoutD />
 }
 
 export default App

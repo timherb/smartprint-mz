@@ -26,7 +26,9 @@ import {
   startHealthMonitor,
   stopHealthMonitor,
   getMediaSizes,
-  setOnJobDone
+  setOnJobDone,
+  setMainWindowRef,
+  setHealthMainWindowRef
 } from './printer'
 
 // ---------------------------------------------------------------------------
@@ -186,9 +188,6 @@ app.whenReady().then(() => {
     }
     return { success: true }
   })
-
-  // IPC handlers will be registered here as features are built
-  ipcMain.handle('ping', () => 'pong')
 
   // App: set window title from renderer
   ipcMain.on('app:set-title', (_event, title: string) => {
@@ -387,6 +386,13 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+
+  // Register main window ref with printer subsystems (avoids getAllWindows pitfall
+  // where hidden print windows can intercept IPC events or discovery calls)
+  if (mainWindowRef) {
+    setMainWindowRef(mainWindowRef)
+    setHealthMainWindowRef(mainWindowRef)
+  }
 
   // Set up auto-updater after window is created
   if (mainWindowRef) {

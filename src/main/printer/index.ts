@@ -15,7 +15,8 @@ export {
   getPrinterPool,
   selectNextPrinter,
   clearPrinterCache,
-  getMediaSizes
+  getMediaSizes,
+  setMainWindowRef
 } from './manager'
 
 export type {
@@ -54,7 +55,8 @@ export {
   startHealthMonitor,
   stopHealthMonitor,
   isHealthMonitorRunning,
-  emitPrinterEvent
+  emitPrinterEvent,
+  setHealthMainWindowRef
 } from './health'
 
 export type {

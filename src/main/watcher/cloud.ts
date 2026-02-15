@@ -183,6 +183,7 @@ export class CloudWatcher extends EventEmitter {
       this.healthTimer = null
     }
     this.isPolling = false
+    this.processedFiles.clear()
     logger.info('Cloud polling service stopped')
   }
 

@@ -644,9 +644,9 @@ export default function MonitorD(): React.JSX.Element {
   const refreshHealth = usePrinter((s) => s.refreshHealth)
   const cancelJob = usePrinter((s) => s.cancelJob)
   const submitJob = usePrinter((s) => s.submitJob)
-  const subscribeToEvents = usePrinter((s) => s.subscribeToEvents)
-  const photos = useGallery().photos
-  const lastPhoto = photos.length > 0 ? photos[photos.length - 1] : null
+  const photos = useGallery((s) => s.photos)
+  // photos are sorted newest-first, so index 0 is the most recent
+  const lastPhoto = photos.length > 0 ? photos[0] : null
   const mode = useSettings((s) => s.mode)
   const cloudConnected = useCloud((s) => s.connected)
   const watcherRunning = useWatcher((s) => s.running)
@@ -658,7 +658,7 @@ export default function MonitorD(): React.JSX.Element {
     return () => clearInterval(id)
   }, [])
 
-  // Auto-refresh
+  // Auto-refresh (event subscription is handled by AppLayoutD on mount)
   useEffect(() => {
     refreshQueue()
     refreshHealth()
@@ -669,12 +669,6 @@ export default function MonitorD(): React.JSX.Element {
     }, 5000)
     return () => clearInterval(id)
   }, [isPaused, refreshQueue, refreshHealth])
-
-  // Events
-  useEffect(() => {
-    const unsubscribe = subscribeToEvents()
-    return unsubscribe
-  }, [subscribeToEvents])
 
   // Map queue jobs
   const mappedJobs: PrintJob[] = queue.map((job) => {

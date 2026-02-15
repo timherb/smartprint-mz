@@ -6,7 +6,9 @@
  */
 
 import { exec } from 'node:child_process'
-import { stat } from 'node:fs/promises'
+import { stat, writeFile, unlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import winston from 'winston'
 import { selectNextPrinter, getPrinterByName, getPrinterPool } from './manager'
 import type { PrinterInfo } from './manager'
@@ -137,52 +139,74 @@ async function executePrint(job: PrintJob): Promise<boolean> {
  * Print on Windows using PowerShell + .NET System.Drawing.
  * This bypasses Electron's broken webContents.print() and goes through
  * the standard Windows GDI print pipeline that all native apps use.
+ *
+ * The script is written to a temp .ps1 file to avoid command-line quoting
+ * issues that silently break the script when passed inline via -Command.
  */
-function executePrintWindows(
+async function executePrintWindows(
   filepath: string,
   printerName: string,
   copies: number,
   jobId: string
 ): Promise<boolean> {
-  return new Promise((resolve) => {
-    // Escape single quotes for PowerShell
-    const psPath = filepath.replace(/'/g, "''")
-    const psPrinter = printerName.replace(/'/g, "''")
+  // Escape single quotes for PowerShell string literals
+  const psPath = filepath.replace(/'/g, "''")
+  const psPrinter = printerName.replace(/'/g, "''")
 
-    const script = `
+  const script = `
 Add-Type -AssemblyName System.Drawing
-$bmp = [System.Drawing.Bitmap]::FromFile('${psPath}')
-$pd = New-Object System.Drawing.Printing.PrintDocument
-$pd.PrinterSettings.PrinterName = '${psPrinter}'
-$pd.PrinterSettings.Copies = ${copies}
-$pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
-if ($bmp.Width -gt $bmp.Height) { $pd.DefaultPageSettings.Landscape = $true }
-$pd.add_PrintPage({
-  param($sender, $e)
-  $destRect = $e.MarginBounds
-  $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-  $e.Graphics.DrawImage($bmp, $destRect)
-})
-$pd.Print()
-$bmp.Dispose()
+try {
+  $bmp = [System.Drawing.Bitmap]::FromFile('${psPath}')
+  $pd = New-Object System.Drawing.Printing.PrintDocument
+  $pd.PrinterSettings.PrinterName = '${psPrinter}'
+  $pd.PrinterSettings.Copies = ${copies}
+  $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+  if ($bmp.Width -gt $bmp.Height) {
+    $pd.DefaultPageSettings.Landscape = $true
+  }
+  $pd.add_PrintPage({
+    param($sender, $e)
+    $destRect = $e.MarginBounds
+    $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $e.Graphics.DrawImage($bmp, $destRect)
+  })
+  $pd.Print()
+  $bmp.Dispose()
+  Write-Output "PRINT_OK"
+} catch {
+  Write-Error $_.Exception.Message
+  exit 1
+}
 `
 
-    logger.info('Printing via Windows GDI', { jobId, printer: printerName, filepath })
+  // Write script to a temp file to avoid cmd.exe quoting mangling
+  const scriptPath = join(tmpdir(), `smart-print-${Date.now()}-${jobId}.ps1`)
+  await writeFile(scriptPath, script, 'utf-8')
 
+  logger.info('Printing via Windows GDI', { jobId, printer: printerName, filepath, scriptPath })
+
+  return new Promise((resolve) => {
     exec(
-      `powershell -NoProfile -NonInteractive -Command "${script.replace(/"/g, '\\"')}"`,
+      `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`,
       { timeout: 30000 },
-      (error, _stdout, stderr) => {
-        if (error) {
+      (error, stdout, stderr) => {
+        // Clean up temp script
+        unlink(scriptPath).catch(() => {})
+
+        const output = stdout?.trim() ?? ''
+        const errOutput = stderr?.trim() ?? ''
+
+        if (error || !output.includes('PRINT_OK')) {
           logger.error('Windows print failed', {
             jobId,
             printer: printerName,
-            error: error.message,
-            stderr: stderr?.trim()
+            error: error?.message ?? 'No PRINT_OK in output',
+            stdout: output,
+            stderr: errOutput
           })
           resolve(false)
         } else {
-          logger.info('Windows print succeeded', { jobId, printer: printerName })
+          logger.info('Windows print succeeded', { jobId, printer: printerName, stdout: output })
           resolve(true)
         }
       }

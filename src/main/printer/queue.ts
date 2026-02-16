@@ -173,40 +173,57 @@ async function executePrintWindows(
 Add-Type -AssemblyName System.Drawing
 try {
   $bmp = [System.Drawing.Bitmap]::FromFile('${psPath}')
+  $isPortrait = $bmp.Height -gt $bmp.Width
+
   $pd = New-Object System.Drawing.Printing.PrintDocument
   $pd.PrinterSettings.PrinterName = '${psPrinter}'
   $pd.PrinterSettings.Copies = ${copies}
   $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
-
-  # Portrait images need to be rotated 90° for 6x4 printers that feed landscape
-  $isPortrait = $bmp.Height -gt $bmp.Width
-  if ($isPortrait) {
-    # Rotate portrait images 90° clockwise
-    $bmp.RotateFlip([System.Drawing.RotateFlipType]::Rotate90FlipNone)
-  }
-  # Always print in landscape orientation (6x4)
   $pd.DefaultPageSettings.Landscape = $true
 
   $pd.add_PrintPage({
     param($sender, $e)
-    # Calculate aspect-ratio-preserving rectangle
+    $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+
     $pageWidth = $e.MarginBounds.Width
     $pageHeight = $e.MarginBounds.Height
-    $imgWidth = $bmp.Width
-    $imgHeight = $bmp.Height
 
-    $scale = [Math]::Min($pageWidth / $imgWidth, $pageHeight / $imgHeight)
-    $destWidth = [Math]::Floor($imgWidth * $scale)
-    $destHeight = [Math]::Floor($imgHeight * $scale)
+    if ($isPortrait) {
+      # For portrait images, rotate 90° clockwise using graphics transform
+      # After rotation, swap width/height for scaling calculation
+      $imgWidth = $bmp.Height
+      $imgHeight = $bmp.Width
 
-    # Center the image on the page
-    $destX = $e.MarginBounds.X + [Math]::Floor(($pageWidth - $destWidth) / 2)
-    $destY = $e.MarginBounds.Y + [Math]::Floor(($pageHeight - $destHeight) / 2)
+      $scale = [Math]::Min($pageWidth / $imgWidth, $pageHeight / $imgHeight)
+      $destWidth = [Math]::Floor($imgWidth * $scale)
+      $destHeight = [Math]::Floor($imgHeight * $scale)
 
-    $destRect = New-Object System.Drawing.Rectangle($destX, $destY, $destWidth, $destHeight)
+      # Center position
+      $centerX = $e.MarginBounds.X + $pageWidth / 2
+      $centerY = $e.MarginBounds.Y + $pageHeight / 2
 
-    $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-    $e.Graphics.DrawImage($bmp, $destRect)
+      # Apply rotation transform
+      $e.Graphics.TranslateTransform($centerX, $centerY)
+      $e.Graphics.RotateTransform(90)
+
+      # Draw centered at origin (which is now the rotated center point)
+      $destRect = New-Object System.Drawing.Rectangle([Math]::Floor(-$destWidth/2), [Math]::Floor(-$destHeight/2), $destWidth, $destHeight)
+      $e.Graphics.DrawImage($bmp, $destRect)
+    } else {
+      # Landscape images - no rotation needed
+      $imgWidth = $bmp.Width
+      $imgHeight = $bmp.Height
+
+      $scale = [Math]::Min($pageWidth / $imgWidth, $pageHeight / $imgHeight)
+      $destWidth = [Math]::Floor($imgWidth * $scale)
+      $destHeight = [Math]::Floor($imgHeight * $scale)
+
+      $destX = $e.MarginBounds.X + [Math]::Floor(($pageWidth - $destWidth) / 2)
+      $destY = $e.MarginBounds.Y + [Math]::Floor(($pageHeight - $destHeight) / 2)
+
+      $destRect = New-Object System.Drawing.Rectangle($destX, $destY, $destWidth, $destHeight)
+      $e.Graphics.DrawImage($bmp, $destRect)
+    }
   })
   $pd.Print()
   $bmp.Dispose()

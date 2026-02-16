@@ -189,7 +189,22 @@ try {
 
   $pd.add_PrintPage({
     param($sender, $e)
-    $destRect = $e.MarginBounds
+    # Calculate aspect-ratio-preserving rectangle
+    $pageWidth = $e.MarginBounds.Width
+    $pageHeight = $e.MarginBounds.Height
+    $imgWidth = $bmp.Width
+    $imgHeight = $bmp.Height
+
+    $scale = [Math]::Min($pageWidth / $imgWidth, $pageHeight / $imgHeight)
+    $destWidth = [Math]::Floor($imgWidth * $scale)
+    $destHeight = [Math]::Floor($imgHeight * $scale)
+
+    # Center the image on the page
+    $destX = $e.MarginBounds.X + [Math]::Floor(($pageWidth - $destWidth) / 2)
+    $destY = $e.MarginBounds.Y + [Math]::Floor(($pageHeight - $destHeight) / 2)
+
+    $destRect = New-Object System.Drawing.Rectangle($destX, $destY, $destWidth, $destHeight)
+
     $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $e.Graphics.DrawImage($bmp, $destRect)
   })

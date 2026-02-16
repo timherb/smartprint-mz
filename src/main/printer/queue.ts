@@ -172,50 +172,60 @@ async function executePrintWindows(
   const script = `
 Add-Type -AssemblyName System.Drawing
 try {
-  $originalBmp = [System.Drawing.Bitmap]::FromFile('${psPath}')
-  $isPortrait = $originalBmp.Height -gt $originalBmp.Width
+  $bmp = [System.Drawing.Bitmap]::FromFile('${psPath}')
+  $imgIsPortrait = $bmp.Height -gt $bmp.Width
 
-  # Create rotated bitmap if portrait
-  if ($isPortrait) {
-    $rotatedBmp = New-Object System.Drawing.Bitmap($originalBmp.Height, $originalBmp.Width)
-    $graphics = [System.Drawing.Graphics]::FromImage($rotatedBmp)
-    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-    # Rotate 90° clockwise: translate to center, rotate, translate back
-    $graphics.TranslateTransform($rotatedBmp.Width / 2, $rotatedBmp.Height / 2)
-    $graphics.RotateTransform(90)
-    $graphics.TranslateTransform(-$originalBmp.Width / 2, -$originalBmp.Height / 2)
-    $graphics.DrawImage($originalBmp, 0, 0)
-    $graphics.Dispose()
-    $originalBmp.Dispose()
-    $bmp = $rotatedBmp
-  } else {
-    $bmp = $originalBmp
-  }
+  Write-Output "IMG_SIZE:$($bmp.Width)x$($bmp.Height) portrait=$imgIsPortrait"
 
   $pd = New-Object System.Drawing.Printing.PrintDocument
   $pd.PrinterSettings.PrinterName = '${psPrinter}'
   $pd.PrinterSettings.Copies = ${copies}
   $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
-  $pd.DefaultPageSettings.Landscape = $true
+
+  # Set page orientation to match image
+  if ($imgIsPortrait) {
+    $pd.DefaultPageSettings.Landscape = $false
+  } else {
+    $pd.DefaultPageSettings.Landscape = $true
+  }
 
   $pd.add_PrintPage({
     param($sender, $e)
-    # Calculate aspect-ratio-preserving rectangle
-    $pageWidth = $e.MarginBounds.Width
-    $pageHeight = $e.MarginBounds.Height
-    $imgWidth = $bmp.Width
-    $imgHeight = $bmp.Height
+    $pageW = $e.PageBounds.Width
+    $pageH = $e.PageBounds.Height
+    $pageIsPortrait = $pageH -gt $pageW
 
-    $scale = [Math]::Min($pageWidth / $imgWidth, $pageHeight / $imgHeight)
-    $destWidth = [Math]::Floor($imgWidth * $scale)
-    $destHeight = [Math]::Floor($imgHeight * $scale)
+    Write-Output "PAGE_SIZE:$($pageW)x$($pageH) portrait=$pageIsPortrait"
 
-    # Center the image on the page
-    $destX = $e.MarginBounds.X + [Math]::Floor(($pageWidth - $destWidth) / 2)
-    $destY = $e.MarginBounds.Y + [Math]::Floor(($pageHeight - $destHeight) / 2)
+    # If driver ignored our orientation request, rotate the image to match
+    if ($pageIsPortrait -ne $imgIsPortrait) {
+      Write-Output "ORIENTATION_MISMATCH: rotating image"
+      $rotated = New-Object System.Drawing.Bitmap($bmp.Height, $bmp.Width)
+      $rotated.SetResolution($bmp.HorizontalResolution, $bmp.VerticalResolution)
+      $g = [System.Drawing.Graphics]::FromImage($rotated)
+      $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      # Standard GDI+ 90-degree CW rotation pattern
+      $g.TranslateTransform($bmp.Height, 0)
+      $g.RotateTransform(90)
+      $g.DrawImage($bmp, 0, 0, $bmp.Width, $bmp.Height)
+      $g.Dispose()
+      $bmp.Dispose()
+      $bmp = $rotated
+      Write-Output "ROTATED_SIZE:$($bmp.Width)x$($bmp.Height)"
+    }
 
-    $destRect = New-Object System.Drawing.Rectangle($destX, $destY, $destWidth, $destHeight)
+    # Scale to fill page preserving aspect ratio
+    $scale = [Math]::Min($pageW / $bmp.Width, $pageH / $bmp.Height)
+    $destW = [Math]::Floor($bmp.Width * $scale)
+    $destH = [Math]::Floor($bmp.Height * $scale)
 
+    # Center on page
+    $destX = [Math]::Floor(($pageW - $destW) / 2)
+    $destY = [Math]::Floor(($pageH - $destH) / 2)
+
+    Write-Output "DEST_RECT:$($destX),$($destY) $($destW)x$($destH) scale=$scale"
+
+    $destRect = New-Object System.Drawing.Rectangle($destX, $destY, $destW, $destH)
     $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $e.Graphics.DrawImage($bmp, $destRect)
   })

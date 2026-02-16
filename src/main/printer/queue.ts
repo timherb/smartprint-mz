@@ -177,9 +177,16 @@ try {
   $pd.PrinterSettings.PrinterName = '${psPrinter}'
   $pd.PrinterSettings.Copies = ${copies}
   $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
-  if ($bmp.Width -gt $bmp.Height) {
-    $pd.DefaultPageSettings.Landscape = $true
+
+  # Portrait images need to be rotated 90° for 6x4 printers that feed landscape
+  $isPortrait = $bmp.Height -gt $bmp.Width
+  if ($isPortrait) {
+    # Rotate portrait images 90° clockwise
+    $bmp.RotateFlip([System.Drawing.RotateFlipType]::Rotate90FlipNone)
   }
+  # Always print in landscape orientation (6x4)
+  $pd.DefaultPageSettings.Landscape = $true
+
   $pd.add_PrintPage({
     param($sender, $e)
     $destRect = $e.MarginBounds

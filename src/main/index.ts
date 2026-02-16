@@ -1,6 +1,9 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, screen } from 'electron'
 import { join, extname } from 'path'
 import { readFile, readdir, stat } from 'fs/promises'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+import { randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import ElectronStoreModule from 'electron-store'
 // Handle ESM/CJS interop - electron-store v11 is ESM-only
@@ -30,6 +33,50 @@ import {
   setMainWindowRef,
   setHealthMainWindowRef
 } from './printer'
+
+const execFileAsync = promisify(execFile)
+
+// ---------------------------------------------------------------------------
+// Device ID — hardware-based, cached in electron-store
+// ---------------------------------------------------------------------------
+
+let cachedDeviceId: string | null = null
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getOrCreateDeviceId(store: InstanceType<typeof ElectronStore<any>>): Promise<string> {
+  // Return cached value if already resolved this session
+  if (cachedDeviceId) return cachedDeviceId
+
+  // Check electron-store first
+  const stored = store.get('deviceId') as string | undefined
+  if (stored) {
+    cachedDeviceId = stored
+    return stored
+  }
+
+  // Query hardware UUID
+  let hwUuid: string | null = null
+  try {
+    if (process.platform === 'win32') {
+      const { stdout } = await execFileAsync('wmic', ['csproduct', 'get', 'UUID'], { timeout: 5000 })
+      const lines = stdout.trim().split(/\r?\n/).filter((l) => l.trim().length > 0)
+      // Second line contains the UUID (first line is the header "UUID")
+      const uuidLine = lines.find((l) => /^[0-9A-F]{8}-/i.test(l.trim()))
+      if (uuidLine) hwUuid = uuidLine.trim()
+    } else if (process.platform === 'darwin') {
+      const { stdout } = await execFileAsync('system_profiler', ['SPHardwareDataType'], { timeout: 5000 })
+      const match = stdout.match(/Hardware UUID:\s*([0-9A-F-]+)/i)
+      if (match) hwUuid = match[1]
+    }
+  } catch (err) {
+    console.warn('[DeviceID] Hardware UUID query failed, using fallback:', err)
+  }
+
+  const deviceId = hwUuid || randomUUID()
+  store.set('deviceId', deviceId)
+  cachedDeviceId = deviceId
+  return deviceId
+}
 
 // ---------------------------------------------------------------------------
 // File Watcher (Local Mode)
@@ -176,6 +223,15 @@ app.whenReady().then(() => {
       printerPool: [] as string[],
       copies: 1
     }
+  })
+
+  // ── Device ID — resolve at startup ──
+  getOrCreateDeviceId(settingsStore).then((id) => {
+    console.log(`[DeviceID] ${id}`)
+  })
+
+  ipcMain.handle('app:get-device-id', async () => {
+    return getOrCreateDeviceId(settingsStore)
   })
 
   ipcMain.handle('settings:get', () => {

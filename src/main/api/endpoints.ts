@@ -6,6 +6,7 @@
 
 export interface RegisterRequest {
   registrationKey: string
+  deviceId: string
 }
 
 export interface ConfirmPrintRequest {

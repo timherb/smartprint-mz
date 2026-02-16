@@ -245,7 +245,8 @@ export async function checkNetworkConnectivity(): Promise<boolean> {
 export async function registerDevice(
   registrationKey: string
 ): Promise<RegisterResponse> {
-  const payload: RegisterRequest = { registrationKey }
+  // deviceId will be added when cloud event selection flow is wired up
+  const payload: Omit<RegisterRequest, 'deviceId'> = { registrationKey }
   const response = await withRetry(() =>
     apiClient.post<RegisterResponse>(ENDPOINTS.REGISTER, payload)
   )

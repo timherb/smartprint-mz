@@ -194,6 +194,7 @@ interface PrinterAPI {
 
 interface SmartPrintAPI {
   setWindowTitle: (title: string) => void
+  getDeviceId: () => Promise<string>
   openDirectory: () => Promise<{ canceled: boolean; path: string }>
   readImageAsDataUrl: (filepath: string) => Promise<string | null>
   settings: {

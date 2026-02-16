@@ -91,6 +91,9 @@ const api = {
     ipcRenderer.send('app:set-title', title)
   },
 
+  // App: get hardware-based device ID
+  getDeviceId: (): Promise<string> => ipcRenderer.invoke('app:get-device-id'),
+
   // Dialog
   openDirectory: (): Promise<{ canceled: boolean; path: string }> =>
     ipcRenderer.invoke('dialog:open-directory'),

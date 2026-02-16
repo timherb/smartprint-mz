@@ -32,6 +32,7 @@ import {
   Loader2,
   Copy,
   Palette,
+  Fingerprint,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -477,6 +478,37 @@ function ThemePickerRow({ colors }: { colors: PressThemeColors }): React.JSX.Ele
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Device ID row
+// ---------------------------------------------------------------------------
+
+function DeviceIdRow({ colors }: { colors: PressThemeColors }): React.JSX.Element {
+  const [deviceId, setDeviceId] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.api.getDeviceId().then(setDeviceId).catch(() => setDeviceId('unavailable'))
+  }, [])
+
+  return (
+    <div className="relative p-4 flex items-center justify-between" style={metalPanelStyle(colors)}>
+      <PanelRivets colors={colors} />
+      <div className="flex items-center gap-3 relative">
+        <Fingerprint className="h-3.5 w-3.5" style={{ color: colors.accent }} />
+        <div>
+          <p className="text-xs font-bold" style={{ color: colors.textPrimary }}>DEVICE ID</p>
+          <p className="text-[10px]" style={{ color: colors.textMuted }}>Hardware-bound identifier</p>
+        </div>
+      </div>
+      <span
+        className="text-[10px] select-all rounded px-2 py-1"
+        style={{ ...monoFont, ...insetPanelStyle(colors), color: colors.textPrimary }}
+      >
+        {deviceId ?? '...'}
+      </span>
     </div>
   )
 }
@@ -1191,6 +1223,9 @@ export default function SettingsD(): React.JSX.Element {
 
                 {/* Press theme picker */}
                 <ThemePickerRow colors={c} />
+
+                {/* Device ID */}
+                <DeviceIdRow colors={c} />
               </div>
             </section>
 

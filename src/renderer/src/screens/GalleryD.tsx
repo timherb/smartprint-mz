@@ -169,6 +169,7 @@ function PhotoCard({
   batchMode,
   onSelect,
   onClick,
+  onPrint,
   colors,
 }: {
   photo: DisplayPhoto
@@ -176,6 +177,7 @@ function PhotoCard({
   batchMode: boolean
   onSelect: () => void
   onClick: () => void
+  onPrint: () => void
   colors: PressThemeColors
 }): React.JSX.Element {
   const bgColor = `hsl(${photo.hue}, ${photo.saturation}%, ${photo.lightness}%)`
@@ -226,7 +228,7 @@ function PhotoCard({
           </div>
         </div>
 
-        {/* Hover overlay - loupe icon */}
+        {/* Hover overlay - loupe icon + reprint button */}
         {!batchMode && (
           <div className={cn(
             'absolute inset-0 flex items-center justify-center',
@@ -235,6 +237,19 @@ function PhotoCard({
             <div className="rounded-full p-2" style={{ backgroundColor: `${colors.baseDark}cc` }}>
               <ZoomIn className="h-4 w-4" style={{ color: colors.accent }} />
             </div>
+            {/* Quick reprint button */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onPrint() }}
+              className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded transition-all duration-150 hover:scale-110 active:scale-95"
+              style={{
+                background: `linear-gradient(to bottom, ${colors.accent}, ${colors.accentDark})`,
+                boxShadow: `0 2px 6px ${colors.shadowColor}0.5)`,
+              }}
+              aria-label={`Reprint ${photo.filename}`}
+            >
+              <Printer className="h-3 w-3 text-white" />
+            </button>
           </div>
         )}
       </div>
@@ -991,6 +1006,7 @@ export default function GalleryD(): React.JSX.Element {
                   batchMode={batchMode}
                   onSelect={() => togglePhotoSelection(photo.id)}
                   onClick={() => openDetail(index)}
+                  onPrint={() => handleDetailReprint(photo)}
                   colors={c}
                 />
               ))}

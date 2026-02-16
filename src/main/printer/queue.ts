@@ -214,12 +214,12 @@ try {
       Write-Output "ROTATED_SIZE:$($bmp.Width)x$($bmp.Height)"
     }
 
-    # Scale to fill page preserving aspect ratio
-    $scale = [Math]::Min($pageW / $bmp.Width, $pageH / $bmp.Height)
+    # Scale to fill page (crop overflow) preserving aspect ratio
+    $scale = [Math]::Max($pageW / $bmp.Width, $pageH / $bmp.Height)
     $destW = [Math]::Floor($bmp.Width * $scale)
     $destH = [Math]::Floor($bmp.Height * $scale)
 
-    # Center on page
+    # Center on page (negative offsets crop the overflow evenly)
     $destX = [Math]::Floor(($pageW - $destW) / 2)
     $destY = [Math]::Floor(($pageH - $destH) / 2)
 

@@ -209,6 +209,10 @@ npm run typecheck    # TypeScript check (node + web)
 
 ---
 
+## Cloud API
+
+- **App ID:** `5174A6DD-55C9-4718-821C-21D26FB348BC` (defined in `src/main/api/endpoints.ts` as `APP_ID`)
+
 ## Upcoming: Cloud Event Selection Flow
 
 Stashed plan at `~/.claude/plans/dapper-roaming-peacock.md`. Waiting for YAML spec from architecture team. Key points:

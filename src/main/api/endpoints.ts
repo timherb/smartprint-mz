@@ -2,6 +2,11 @@
  * F004 - Cloud API endpoint definitions and type-safe interfaces
  */
 
+// ─── App Identity ────────────────────────────────────────────────────────────
+
+/** Backend-assigned application identifier for SmartPrint */
+export const APP_ID = '5174A6DD-55C9-4718-821C-21D26FB348BC'
+
 // ─── Request Interfaces ───────────────────────────────────────────────────────
 
 export interface RegisterRequest {

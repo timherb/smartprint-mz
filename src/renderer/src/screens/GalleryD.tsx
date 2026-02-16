@@ -1,13 +1,13 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { LocalImage } from '@/components/LocalImage'
 import { useGallery, type Photo as StorePhoto } from '@/stores/gallery'
 import { usePrinter } from '@/stores/printer'
 import { useSettings } from '@/stores/settings'
 import { usePressTheme } from '@/stores/pressTheme'
+import { addToast } from '@/stores/toast'
 import type { PressThemeColors } from '@/themes/press-themes'
 import {
-  Search,
   X,
   ZoomIn,
   Printer,
@@ -15,27 +15,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
-  Grid3X3,
-  List,
   Camera,
   FolderOpen,
   Copy,
   Aperture,
   CircleDot,
-  CalendarArrowDown,
-  CalendarArrowUp,
-  ArrowDownAZ,
-  ArrowUpAZ,
-  LayoutGrid,
-  ChevronDown,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type ViewMode = 'grid' | 'list'
-type SortMode = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'size'
 
 interface DisplayPhoto {
   id: string
@@ -130,15 +119,6 @@ function metalPanelStyle(c: PressThemeColors): React.CSSProperties {
     background: `linear-gradient(to bottom, ${c.baseLight}, ${c.baseMid})`,
     boxShadow: `inset 0 1px 0 ${c.highlightColor}0.04), 0 2px 8px ${c.shadowColor}0.3)`,
     border: `1px solid ${c.borderColor}`,
-  }
-}
-
-function insetPanelStyle(c: PressThemeColors): React.CSSProperties {
-  return {
-    borderRadius: '0.5rem',
-    backgroundColor: c.baseDark,
-    boxShadow: `inset 0 2px 6px ${c.shadowColor}0.5), inset 0 -1px 0 ${c.highlightColor}0.02)`,
-    border: `1px solid ${c.borderDark}`,
   }
 }
 
@@ -289,131 +269,6 @@ function PhotoCard({
           </div>
         </div>
       )}
-    </button>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Photo row for list view
-// ---------------------------------------------------------------------------
-
-function PhotoRow({
-  photo,
-  isSelected,
-  batchMode,
-  onSelect,
-  onClick,
-  colors,
-}: {
-  photo: DisplayPhoto
-  isSelected: boolean
-  batchMode: boolean
-  onSelect: () => void
-  onClick: () => void
-  colors: PressThemeColors
-}): React.JSX.Element {
-  const bgColor = `hsl(${photo.hue}, ${photo.saturation}%, ${photo.lightness}%)`
-  const bgColorLight = `hsl(${photo.hue}, ${photo.saturation + 10}%, ${photo.lightness + 8}%)`
-
-  return (
-    <button
-      type="button"
-      onClick={batchMode ? onSelect : onClick}
-      className="group flex w-full items-center gap-3 rounded px-3 py-2 text-left transition-all duration-200"
-      style={{
-        backgroundColor: isSelected && batchMode ? `${colors.accent}1a` : 'transparent',
-        ...(isSelected && batchMode ? { boxShadow: `inset 0 0 0 1px ${colors.accent}4d` } : {}),
-      }}
-      onMouseEnter={(e) => {
-        if (!(isSelected && batchMode)) {
-          e.currentTarget.style.backgroundColor = `${colors.baseLight}99`
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!(isSelected && batchMode)) {
-          e.currentTarget.style.backgroundColor = isSelected && batchMode ? `${colors.accent}1a` : 'transparent'
-        }
-      }}
-    >
-      {/* Checkbox */}
-      {batchMode && (
-        <div
-          className="flex h-4 w-4 shrink-0 items-center justify-center rounded transition-all duration-200"
-          style={
-            isSelected
-              ? {
-                  background: `linear-gradient(to bottom, ${colors.accent}, ${colors.accentDark})`,
-                }
-              : {
-                  backgroundColor: colors.baseDark,
-                  border: `1px solid ${colors.borderColor}`,
-                }
-          }
-        >
-          {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-        </div>
-      )}
-
-      {/* Mini thumbnail with paper border */}
-      <div
-        className="h-8 w-12 shrink-0 overflow-hidden rounded p-[2px]"
-        style={{ backgroundColor: colors.paper }}
-      >
-        <div
-          className="h-full w-full overflow-hidden rounded-[1px]"
-          style={{ background: `linear-gradient(135deg, ${bgColor}, ${bgColorLight})` }}
-        >
-          {photo.filepath && (
-            <LocalImage
-              filepath={photo.filepath}
-              alt=""
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Filename */}
-      <span
-        className="min-w-0 flex-1 truncate text-xs font-medium"
-        style={{ ...monoFont, color: colors.textPrimary }}
-      >
-        {photo.filename}
-      </span>
-
-      {/* Status LED */}
-      <div className="flex items-center gap-1.5 w-20 shrink-0">
-        <span
-          className="h-2 w-2 rounded-full"
-          style={{
-            backgroundColor: colors.ledGreen,
-            boxShadow: `0 0 4px ${colors.ledGreen}4d`,
-          }}
-        />
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider"
-          style={{ color: colors.ledGreen }}
-        >
-          DONE
-        </span>
-      </div>
-
-      {/* Size */}
-      <span
-        className="w-16 shrink-0 text-right text-[10px]"
-        style={{ ...monoFont, color: colors.textMuted }}
-      >
-        {photo.size}
-      </span>
-
-      {/* Date */}
-      <span
-        className="w-24 shrink-0 text-right text-[10px]"
-        style={{ color: colors.textMuted }}
-      >
-        {photo.date}
-      </span>
     </button>
   )
 }
@@ -668,51 +523,17 @@ export default function GalleryD(): React.JSX.Element {
   }, [completedCount])
 
   // Local state
-  const [searchQuery, setSearchQuery] = useState('')
-  const [sortMode, setSortMode] = useState<SortMode>('newest')
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
   const [batchMode, setBatchMode] = useState(false)
   const [detailIndex, setDetailIndex] = useState<number | null>(null)
-  const [showSortMenu, setShowSortMenu] = useState(false)
-  const sortRef = useRef<HTMLDivElement>(null)
 
   const displayPhotos = useMemo(() => photos.map(toDisplayPhoto), [photos])
 
-  // Close sort on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent): void {
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
-        setShowSortMenu(false)
-      }
-    }
-    if (showSortMenu) {
-      document.addEventListener('mousedown', handleClick)
-      return () => document.removeEventListener('mousedown', handleClick)
-    }
-    return undefined
-  }, [showSortMenu])
-
-  // Filter & sort
-  const filteredPhotos = useMemo(() => {
-    return displayPhotos
-      .filter((p) => {
-        if (searchQuery && !p.filename.toLowerCase().includes(searchQuery.toLowerCase())) return false
-        return true
-      })
-      .sort((a, b) => {
-        switch (sortMode) {
-          case 'newest': return b.printedAt - a.printedAt
-          case 'oldest': return a.printedAt - b.printedAt
-          case 'name-asc': return a.filename.localeCompare(b.filename)
-          case 'name-desc': return b.filename.localeCompare(a.filename)
-          case 'size': return b.sizeBytes - a.sizeBytes
-          default: return 0
-        }
-      })
-  }, [displayPhotos, searchQuery, sortMode])
-
-  const filteredCount = filteredPhotos.length
+  // Always newest-first
+  const sortedPhotos = useMemo(
+    () => [...displayPhotos].sort((a, b) => b.printedAt - a.printedAt),
+    [displayPhotos],
+  )
 
   // Handlers
   const togglePhotoSelection = useCallback((id: string) => {
@@ -725,8 +546,8 @@ export default function GalleryD(): React.JSX.Element {
   }, [])
 
   const selectAll = useCallback(() => {
-    setSelectedPhotos(new Set(filteredPhotos.map((p) => p.id)))
-  }, [filteredPhotos])
+    setSelectedPhotos(new Set(sortedPhotos.map((p) => p.id)))
+  }, [sortedPhotos])
 
   const deselectAll = useCallback(() => {
     setSelectedPhotos(new Set())
@@ -743,7 +564,7 @@ export default function GalleryD(): React.JSX.Element {
   }
   function nextPhoto(): void {
     if (detailIndex === null) return
-    setDetailIndex(detailIndex < filteredPhotos.length - 1 ? detailIndex + 1 : detailIndex)
+    setDetailIndex(detailIndex < sortedPhotos.length - 1 ? detailIndex + 1 : detailIndex)
   }
   function exitBatchMode(): void {
     setBatchMode(false)
@@ -751,24 +572,24 @@ export default function GalleryD(): React.JSX.Element {
   }
 
   function handleBatchReprint(): void {
+    const names: string[] = []
     for (const id of selectedPhotos) {
       const photo = displayPhotos.find((p) => p.id === id)
-      if (photo) void submitJob(photo.filename, photo.filepath, { copies })
+      if (photo) {
+        void submitJob(photo.filename, photo.filepath, { copies })
+        names.push(photo.filename)
+      }
+    }
+    if (names.length > 0) {
+      addToast(`Reprinting ${names.length} photo${names.length > 1 ? 's' : ''}`, 'success')
     }
     exitBatchMode()
   }
 
   function handleDetailReprint(photo: DisplayPhoto): void {
     void submitJob(photo.filename, photo.filepath, { copies })
+    addToast(`Reprinting ${photo.filename}`, 'success')
   }
-
-  const sortOptions: { mode: SortMode; label: string; icon: React.ElementType }[] = [
-    { mode: 'newest', label: 'Newest First', icon: CalendarArrowDown },
-    { mode: 'oldest', label: 'Oldest First', icon: CalendarArrowUp },
-    { mode: 'name-asc', label: 'Name A-Z', icon: ArrowDownAZ },
-    { mode: 'name-desc', label: 'Name Z-A', icon: ArrowUpAZ },
-    { mode: 'size', label: 'Largest First', icon: LayoutGrid },
-  ]
 
   const isEmptyState = displayPhotos.length === 0
 
@@ -782,7 +603,7 @@ export default function GalleryD(): React.JSX.Element {
   return (
     <div className="relative flex h-full flex-col" style={headerFont}>
 
-      {/* ---- Filter bar ---- */}
+      {/* ---- Toolbar ---- */}
       <div className="shrink-0" style={{ borderBottom: `1px solid ${c.borderColor}` }}>
         <div className="flex items-center gap-4 px-6 pt-6 pb-3">
           {/* Title */}
@@ -794,116 +615,11 @@ export default function GalleryD(): React.JSX.Element {
               GALLERY
             </h1>
             <p className="text-[10px] mt-0.5 uppercase tracking-wider" style={{ color: c.textMuted }}>
-              {filteredCount} of {displayPhotos.length} printed photos
+              {displayPhotos.length} printed photos
             </p>
           </div>
 
           <div className="flex-1" />
-
-          {/* Search - recessed metal slot */}
-          <div className="relative w-64">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2"
-              style={{ color: c.textMuted }}
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search files..."
-              className="h-8 w-full rounded pl-8 pr-8 text-xs outline-none transition-all duration-200"
-              style={{
-                ...insetPanelStyle(c),
-                ...monoFont,
-                color: c.textPrimary,
-              }}
-              aria-label="Search photos"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 transition"
-                style={{ color: c.textMuted }}
-                aria-label="Clear search"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          {/* Sort dropdown */}
-          <div className="relative" ref={sortRef}>
-            <button
-              type="button"
-              onClick={() => setShowSortMenu(!showSortMenu)}
-              className="flex h-8 items-center gap-1.5 rounded px-3 text-[10px] font-bold uppercase tracking-wider transition-all duration-200"
-              style={{
-                ...metalPanelStyle(c),
-                color: showSortMenu ? c.accent : c.textMuted,
-              }}
-            >
-              <ChevronDown className="h-3 w-3" />
-              <span className="hidden sm:inline">{sortOptions.find((s) => s.mode === sortMode)?.label}</span>
-            </button>
-            {showSortMenu && (
-              <div
-                className="absolute right-0 top-full z-30 mt-1 w-44 rounded-lg py-1"
-                style={{
-                  background: `linear-gradient(to bottom, ${c.baseLight}, ${c.baseMid})`,
-                  border: `1px solid ${c.borderColor}`,
-                  boxShadow: `0 8px 24px ${c.shadowColor}0.5)`,
-                }}
-              >
-                {sortOptions.map((opt) => (
-                  <button
-                    key={opt.mode}
-                    type="button"
-                    onClick={() => { setSortMode(opt.mode); setShowSortMenu(false) }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider transition-all duration-200"
-                    style={{
-                      color: sortMode === opt.mode ? c.accent : c.textPrimary,
-                      backgroundColor: sortMode === opt.mode ? `${c.accent}1a` : 'transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (sortMode !== opt.mode) e.currentTarget.style.backgroundColor = `${c.baseLight}80`
-                    }}
-                    onMouseLeave={(e) => {
-                      if (sortMode !== opt.mode) e.currentTarget.style.backgroundColor = 'transparent'
-                    }}
-                  >
-                    <opt.icon className="h-3 w-3" />
-                    {opt.label}
-                    {sortMode === opt.mode && <Check className="ml-auto h-3 w-3" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* View toggle - industrial switch */}
-          <div className="flex items-center p-0.5" style={insetPanelStyle(c)}>
-            {(['grid', 'list'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className="flex h-7 w-7 items-center justify-center rounded transition-all duration-200"
-                style={
-                  viewMode === mode
-                    ? {
-                        background: `linear-gradient(to bottom, ${c.navTabActiveFrom}, ${c.navTabActiveTo})`,
-                        color: c.accent,
-                        boxShadow: `0 1px 2px ${c.shadowColor}0.2)`,
-                      }
-                    : { color: c.textMuted }
-                }
-                aria-label={mode === 'grid' ? 'Grid view' : 'List view'}
-              >
-                {mode === 'grid' ? <Grid3X3 className="h-3 w-3" /> : <List className="h-3 w-3" />}
-              </button>
-            ))}
-          </div>
 
           {/* Batch toggle */}
           <button
@@ -974,31 +690,10 @@ export default function GalleryD(): React.JSX.Element {
               Start monitoring a folder to see photos appear here.
             </p>
           </div>
-        ) : filteredPhotos.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-28 text-center">
-            <div className="mb-5 flex h-16 w-16 items-center justify-center" style={metalPanelStyle(c)}>
-              <ImageIcon className="h-7 w-7" style={{ color: c.textMuted }} />
-            </div>
-            <p className="text-sm font-bold uppercase tracking-wider" style={{ color: c.textPrimary }}>NO MATCHES</p>
-            <p className="mt-2 max-w-xs text-xs" style={{ color: c.textMuted }}>
-              Try broadening your search criteria.
-            </p>
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="mt-5 px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition"
-              style={{
-                ...metalPanelStyle(c),
-                color: c.textPrimary,
-              }}
-            >
-              RESET FILTERS
-            </button>
-          </div>
-        ) : viewMode === 'grid' ? (
+        ) : (
           <div className="px-6 py-5">
             <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {filteredPhotos.map((photo, index) => (
+              {sortedPhotos.map((photo, index) => (
                 <PhotoCard
                   key={photo.id}
                   photo={photo}
@@ -1007,34 +702,6 @@ export default function GalleryD(): React.JSX.Element {
                   onSelect={() => togglePhotoSelection(photo.id)}
                   onClick={() => openDetail(index)}
                   onPrint={() => handleDetailReprint(photo)}
-                  colors={c}
-                />
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="px-6 py-4">
-            {/* List header */}
-            <div
-              className="mb-1 flex items-center gap-3 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em]"
-              style={{ color: c.textMuted }}
-            >
-              {batchMode && <div className="w-4 shrink-0" />}
-              <div className="h-8 w-12 shrink-0" />
-              <div className="min-w-0 flex-1">FILENAME</div>
-              <div className="w-20 shrink-0">STATUS</div>
-              <div className="w-16 shrink-0 text-right">SIZE</div>
-              <div className="w-24 shrink-0 text-right">DATE</div>
-            </div>
-            <div className="space-y-0.5">
-              {filteredPhotos.map((photo, index) => (
-                <PhotoRow
-                  key={photo.id}
-                  photo={photo}
-                  isSelected={selectedPhotos.has(photo.id)}
-                  batchMode={batchMode}
-                  onSelect={() => togglePhotoSelection(photo.id)}
-                  onClick={() => openDetail(index)}
                   colors={c}
                 />
               ))}
@@ -1077,15 +744,15 @@ export default function GalleryD(): React.JSX.Element {
       )}
 
       {/* ---- Detail modal ---- */}
-      {detailIndex !== null && filteredPhotos[detailIndex] && (
+      {detailIndex !== null && sortedPhotos[detailIndex] && (
         <DetailModal
-          photo={filteredPhotos[detailIndex]}
+          photo={sortedPhotos[detailIndex]}
           onClose={closeDetail}
           onPrev={prevPhoto}
           onNext={nextPhoto}
           hasPrev={detailIndex > 0}
-          hasNext={detailIndex < filteredPhotos.length - 1}
-          onPrint={() => handleDetailReprint(filteredPhotos[detailIndex])}
+          hasNext={detailIndex < sortedPhotos.length - 1}
+          onPrint={() => handleDetailReprint(sortedPhotos[detailIndex])}
           colors={c}
         />
       )}

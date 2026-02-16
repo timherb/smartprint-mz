@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/stores/theme'
 import { useSettings } from '@/stores/settings'
@@ -6,6 +6,7 @@ import { useCloud } from '@/stores/cloud'
 import { usePrinter } from '@/stores/printer'
 import { useWatcher } from '@/stores/watcher'
 import { usePressTheme, usePressThemeStore } from '@/stores/pressTheme'
+import { addToast } from '@/stores/toast'
 import {
   PRESS_THEME_NAMES,
   PRESS_THEME_LABELS,
@@ -18,11 +19,13 @@ import {
   Image as ImageIcon,
   HardDrive,
   Cloud,
+  Printer,
 } from 'lucide-react'
 import SettingsD from '@/screens/SettingsD'
 import MonitorD from '@/screens/MonitorD'
 import GalleryD from '@/screens/GalleryD'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ToastContainer } from '@/components/ToastContainer'
 
 type Page = 'settings' | 'monitor' | 'gallery'
 
@@ -81,7 +84,7 @@ const metalNoise = {
 // Page content router
 // ---------------------------------------------------------------------------
 
-function PageContent({ page }: { page: Page }): React.JSX.Element {
+function PageContent({ page, navigateTo }: { page: Page; navigateTo: (p: Page) => void }): React.JSX.Element {
   switch (page) {
     case 'settings':
       return (
@@ -92,7 +95,7 @@ function PageContent({ page }: { page: Page }): React.JSX.Element {
     case 'monitor':
       return (
         <ErrorBoundary label="Monitor">
-          <MonitorD />
+          <MonitorD navigateTo={navigateTo} />
         </ErrorBoundary>
       )
     case 'gallery':
@@ -147,6 +150,129 @@ function ThemePicker({ colors }: { colors: PressThemeColors }): React.JSX.Elemen
 }
 
 // ---------------------------------------------------------------------------
+// Status bar — printer confidence signal + print counter
+// ---------------------------------------------------------------------------
+
+const monoFont = { fontFamily: '"JetBrains Mono", ui-monospace, monospace' }
+
+function StatusBar({
+  colors: c,
+  onNavigateToSettings,
+}: {
+  colors: PressThemeColors
+  onNavigateToSettings: () => void
+}): React.JSX.Element {
+  const pool = useSettings((s) => s.printerPool)
+  const health = usePrinter((s) => s.health)
+  const queueStats = usePrinter((s) => s.queueStats)
+  const printCountToday = useSettings((s) => s.printCountToday)
+  const printCountDate = useSettings((s) => s.printCountDate)
+
+  // Determine printer status
+  let ledColor = c.ledAmber
+  let statusText = 'No printer selected'
+  let showConfigLink = false
+
+  if (pool.length === 0) {
+    ledColor = c.ledAmber
+    statusText = 'No printer selected'
+    showConfigLink = true
+  } else if (queueStats.printing > 0) {
+    ledColor = c.accent
+    const pendingNote = queueStats.pending > 0 ? `, ${queueStats.pending} queued` : ''
+    statusText = `Printing... (${queueStats.printing} active${pendingNote})`
+  } else if (health) {
+    const onlineCount = health.printersOnline
+    if (onlineCount === 0) {
+      ledColor = c.ledRed
+      const firstName = health.printers[0]?.displayName ?? 'Printer'
+      statusText = pool.length === 1 ? `${firstName} \u2014 Offline` : 'All printers offline'
+    } else {
+      ledColor = c.ledGreen
+      if (onlineCount === 1) {
+        const onlinePrinter = health.printers.find((p) => p.status !== 'offline')
+        statusText = `${onlinePrinter?.displayName ?? 'Printer'} \u2014 Ready`
+      } else {
+        statusText = `${onlineCount} printers ready`
+      }
+    }
+  } else {
+    // Health not loaded yet but pool is configured
+    ledColor = c.textMuted
+    statusText = 'Checking printers...'
+  }
+
+  // Print counter — show 0 if date doesn't match today
+  const today = new Date().toISOString().slice(0, 10)
+  const displayCount = printCountDate === today ? printCountToday : 0
+
+  return (
+    <div
+      className="relative z-10 flex h-8 shrink-0 items-center justify-between px-6"
+      style={{
+        backgroundColor: c.baseDark,
+        borderBottom: `1px solid ${c.borderDark}`,
+        boxShadow: `inset 0 2px 4px ${c.shadowColor}0.4)`,
+      }}
+    >
+      {/* Left: printer status */}
+      <div className="flex items-center gap-2.5">
+        <Printer className="h-3 w-3" style={{ color: c.textMuted }} />
+        {/* LED dot */}
+        <div className="relative">
+          {ledColor !== c.textMuted && (
+            <span
+              className="absolute inset-0 rounded-full blur-[3px] opacity-40"
+              style={{ backgroundColor: ledColor }}
+              aria-hidden
+            />
+          )}
+          <span
+            className="relative block h-2 w-2 rounded-full"
+            style={{
+              background: `linear-gradient(to bottom, ${ledColor}cc, ${ledColor})`,
+              boxShadow: ledColor !== c.textMuted ? `0 0 4px ${ledColor}40` : undefined,
+            }}
+          />
+        </div>
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: c.textPrimary }}
+        >
+          {statusText}
+        </span>
+        {showConfigLink && (
+          <button
+            type="button"
+            onClick={onNavigateToSettings}
+            className="text-[10px] font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
+            style={{ color: c.accent }}
+          >
+            &mdash; Configure in Settings
+          </button>
+        )}
+      </div>
+
+      {/* Right: print counter */}
+      <div className="flex items-center gap-2">
+        <span
+          className="text-sm font-bold tabular-nums"
+          style={{ ...monoFont, color: c.accent, textShadow: `0 0 8px ${c.accentGlow}0.15)` }}
+        >
+          {displayCount}
+        </span>
+        <span
+          className="text-[9px] font-bold uppercase tracking-[0.12em]"
+          style={{ color: c.textMuted }}
+        >
+          PRINTS TODAY
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main layout
 // ---------------------------------------------------------------------------
 
@@ -193,6 +319,8 @@ export default function AppLayoutD(): React.JSX.Element {
   }, [handleKeyDown])
 
   // Mount: subscribe to real-time events + restore persisted state
+  const prevFailedRef = useRef(usePrinter.getState().queueStats.failed)
+
   useEffect(() => {
     const unsubPrinter = usePrinter.getState().subscribeToEvents()
     const unsubWatcher = useWatcher.getState().subscribe()
@@ -207,10 +335,19 @@ export default function AppLayoutD(): React.JSX.Element {
     }
     usePrinter.getState().startMonitor()
 
+    // Toast on print failures
+    const unsubFailures = usePrinter.subscribe((state) => {
+      if (state.queueStats.failed > prevFailedRef.current) {
+        addToast('A print job failed', 'error')
+      }
+      prevFailedRef.current = state.queueStats.failed
+    })
+
     return () => {
       unsubPrinter()
       unsubWatcher()
       unsubCloud()
+      unsubFailures()
     }
   }, [])
 
@@ -406,10 +543,16 @@ export default function AppLayoutD(): React.JSX.Element {
         </div>
       </header>
 
+      {/* ---- Status bar ---- */}
+      <StatusBar colors={c} onNavigateToSettings={() => setActivePage('settings')} />
+
       {/* ---- Content area ---- */}
       <main className="relative z-10 flex-1 overflow-hidden">
-        <PageContent page={activePage} />
+        <PageContent page={activePage} navigateTo={setActivePage} />
       </main>
+
+      {/* ---- Toast notifications ---- */}
+      <ToastContainer />
     </div>
   )
 }

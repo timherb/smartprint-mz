@@ -199,15 +199,6 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Auto-move files to "Printed Photos" folder after print completes or is cancelled
-  setOnJobDone((job) => {
-    if ((job.status === 'completed' || job.status === 'cancelled') && job.filepath) {
-      localWatcher.moveToProcessed(job.filepath).catch((err) => {
-        console.error('[onJobDone] Failed to move file to processed:', err)
-      })
-    }
-  })
-
   // ── Settings persistence via electron-store ──
   const settingsStore = new ElectronStore({
     name: 'app-settings',
@@ -221,7 +212,30 @@ app.whenReady().then(() => {
       logLevel: 'info',
       paperSize: '',
       printerPool: [] as string[],
-      copies: 1
+      copies: 1,
+      printCountDate: '',
+      printCountToday: 0
+    }
+  })
+
+  // Auto-move files to "Printed Photos" folder after print completes or is cancelled
+  // Also increment day-based print counter on completion
+  setOnJobDone((job) => {
+    if ((job.status === 'completed' || job.status === 'cancelled') && job.filepath) {
+      localWatcher.moveToProcessed(job.filepath).catch((err) => {
+        console.error('[onJobDone] Failed to move file to processed:', err)
+      })
+    }
+    if (job.status === 'completed') {
+      const today = new Date().toISOString().slice(0, 10)
+      const storedDate = settingsStore.get('printCountDate', '') as string
+      if (storedDate === today) {
+        const current = settingsStore.get('printCountToday', 0) as number
+        settingsStore.set('printCountToday', current + 1)
+      } else {
+        settingsStore.set('printCountDate', today)
+        settingsStore.set('printCountToday', 1)
+      }
     }
   })
 

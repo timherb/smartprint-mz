@@ -672,16 +672,19 @@ export default function SettingsD(): React.JSX.Element {
   // Paper sizes from driver
   const [driverPaperSizes, setDriverPaperSizes] = useState<{ value: string; label: string }[]>(PAPER_SIZES)
   const [paperSizeSource, setPaperSizeSource] = useState<string | null>(null)
+  const [driverSizesLoaded, setDriverSizesLoaded] = useState(false)
 
   useEffect(() => {
     if (pool.length === 0) {
       setDriverPaperSizes(PAPER_SIZES)
       setPaperSizeSource(null)
+      setDriverSizesLoaded(true)
       return
     }
     const firstPoolPrinter = printers.find((p) => pool.includes(p.name))
     if (!firstPoolPrinter) return
 
+    setDriverSizesLoaded(false)
     setPaperSizeSource(firstPoolPrinter.displayName)
     window.api.printer.mediaSizes(firstPoolPrinter.name)
       .then((sizes) => {
@@ -692,6 +695,7 @@ export default function SettingsD(): React.JSX.Element {
         }
       })
       .catch(() => setDriverPaperSizes(PAPER_SIZES))
+      .finally(() => setDriverSizesLoaded(true))
   }, [pool, printers])
 
   const availablePaperSizes = driverPaperSizes
@@ -699,11 +703,14 @@ export default function SettingsD(): React.JSX.Element {
     ? paperSize
     : availablePaperSizes[0]?.value || ''
 
+  // Only auto-select a paper size after driver sizes have loaded, to avoid
+  // overwriting the persisted value with a fallback during the loading race
   useEffect(() => {
+    if (!driverSizesLoaded) return
     if (!paperSize || !availablePaperSizes.some((s) => s.value === paperSize)) {
       if (availablePaperSizes.length > 0) setPaperSize(availablePaperSizes[0].value)
     }
-  }, [paperSize, availablePaperSizes, setPaperSize])
+  }, [paperSize, availablePaperSizes, setPaperSize, driverSizesLoaded])
 
   // ========================================================================
   // Render

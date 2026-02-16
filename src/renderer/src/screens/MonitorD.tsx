@@ -629,7 +629,7 @@ function LastPrintPreview({ photo, colors }: { photo: Photo; colors: PressThemeC
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function MonitorD(): React.JSX.Element {
+export default function MonitorD({ navigateTo }: { navigateTo?: (page: 'settings' | 'monitor' | 'gallery') => void }): React.JSX.Element {
   const [isPaused, setIsPaused] = useState(false)
   const [now, setNow] = useState(new Date())
 
@@ -737,6 +737,42 @@ export default function MonitorD(): React.JSX.Element {
 
   // Themed shadows
   const pauseBtnActiveShadow = `0 2px 6px ${c.accentGlow}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`
+
+  // No-printer-configured empty state
+  if (pool.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center text-center" style={headerFont}>
+        <div
+          className="mb-5 flex h-20 w-20 items-center justify-center rounded-lg"
+          style={metalPanelStyle(c)}
+        >
+          <Printer className="h-10 w-10" style={{ color: c.textMuted }} />
+        </div>
+        <p
+          className="text-sm font-bold uppercase tracking-[0.15em]"
+          style={{ color: c.textPrimary }}
+        >
+          NO PRINTER CONFIGURED
+        </p>
+        <p className="mt-2 max-w-sm text-xs leading-relaxed" style={{ color: c.textMuted }}>
+          Add a printer to the pool in Settings to start printing photos automatically.
+        </p>
+        {navigateTo && (
+          <button
+            type="button"
+            onClick={() => navigateTo('settings')}
+            className="mt-6 inline-flex items-center gap-2 rounded px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-all duration-200 hover:brightness-110"
+            style={{
+              background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
+              boxShadow: `0 2px 8px ${c.accentGlow}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
+            }}
+          >
+            GO TO SETTINGS
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col" style={headerFont}>

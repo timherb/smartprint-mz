@@ -85,6 +85,15 @@ interface PrinterEventDTO {
   timestamp: number
 }
 
+interface CloudEventDTO {
+  id: number
+  name: string
+  externalID: string
+  startDate: string
+  endDate: string
+  testEvent: string
+}
+
 const api = {
   // App: set window title
   setWindowTitle: (title: string): void => {
@@ -123,12 +132,21 @@ const api = {
     register: (key: string): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('cloud:register', key),
 
+    unregister: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('cloud:unregister'),
+
+    syncEvents: (): Promise<CloudEventDTO[]> =>
+      ipcRenderer.invoke('cloud:sync-events'),
+
+    selectEvent: (id: number): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('cloud:select-event', id),
+
+    setApprovedOnly: (value: boolean): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('cloud:set-approved-only', value),
+
     start: (): Promise<{ success: boolean }> => ipcRenderer.invoke('cloud:start'),
 
     stop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('cloud:stop'),
-
-    confirmPrint: (filename: string): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke('cloud:confirm-print', filename),
 
     health: (): Promise<{ status: 'ok' } | null> => ipcRenderer.invoke('cloud:health'),
 
@@ -138,6 +156,9 @@ const api = {
       connected: boolean
       lastPollTime: number | null
       lastHealthCheckTime: number | null
+      selectedEventId: number | null
+      events: CloudEventDTO[]
+      licenseKey: string
     }> => ipcRenderer.invoke('cloud:status'),
 
     onPhotoReady: (

@@ -7,44 +7,85 @@
 /** Backend-assigned application identifier for SmartPrint */
 export const APP_ID = '5174A6DD-55C9-4718-821C-21D26FB348BC'
 
-// ─── Request Interfaces ───────────────────────────────────────────────────────
+// ─── Activation Types ────────────────────────────────────────────────────────
 
-export interface RegisterRequest {
-  registrationKey: string
-  deviceId: string
+export interface ActivateRequest {
+  appID: string
+  licenseKey: string
+  deviceCode: string
+  swVersion: string
+  osVersion: string
+  name: string
+  platform: string
 }
 
-export interface ConfirmPrintRequest {
+export interface LicenseInfo {
+  name: string
+  programName: string
+  agencyName: string
+  startDate: string
+  endDate: string
+  supportedDevices: number
+  activatedDevices: number
+}
+
+export interface ActivateResponse {
   token: string
-  filename: string
+  userID: string | null
+  licenseInfo: LicenseInfo | null
+  status: number
 }
 
-export interface GetPhotosParams {
-  token: string
+// ─── Event Types ──────────────────────────────────────────────────────────────
+
+export interface CloudEvent {
+  id: number
+  name: string
+  externalID: string
+  startDate: string
+  endDate: string
+  testEvent: string
 }
 
-// ─── Response Interfaces ──────────────────────────────────────────────────────
-
-export interface RegisterResponse {
-  token: string
+export interface SyncEventsRequest {
+  osVersion: string
+  swVersion: string
 }
 
-export interface PhotoEntry {
+export interface SyncEventsResponse {
+  events: CloudEvent[]
+  status: number
+}
+
+// ─── Image Types ──────────────────────────────────────────────────────────────
+
+export interface ImageEntry {
   url: string
-  filename: string
-  sizeBytes: number
+  height: number
+  width: number
+  fileName: string
+  bytes: number
 }
 
-export interface GetPhotosResponse {
-  photos: PhotoEntry[]
+export interface GetImagesRequest {
+  eventID: number
+  downloaded: boolean
+  approved?: boolean | null
 }
 
-export interface ConfirmPrintResponse {
-  success: boolean
+export interface GetImagesResponse {
+  images: ImageEntry[]
+  status: number
 }
 
-export interface HealthResponse {
-  status: 'ok'
+// ─── Update Downloaded Types ──────────────────────────────────────────────────
+
+export interface UpdateDownloadedRequest {
+  fileNames: string[]
+}
+
+export interface UpdateDownloadedResponse {
+  status: number
 }
 
 // ─── API Error Response ───────────────────────────────────────────────────────
@@ -58,10 +99,10 @@ export interface ApiErrorResponse {
 // ─── Endpoint Paths ───────────────────────────────────────────────────────────
 
 export const ENDPOINTS = {
-  REGISTER: '/register',
-  PHOTOS: '/photos',
-  CONFIRM_PRINT: '/photos/confirm',
-  HEALTH: '/health'
+  ACTIVATE: '/device/activate',
+  SYNC_EVENTS: '/device/syncevents',
+  IMAGES: '/image/images',
+  UPDATE_DOWNLOADED: '/image/updatedownloaded'
 } as const
 
 export type EndpointPath = (typeof ENDPOINTS)[keyof typeof ENDPOINTS]

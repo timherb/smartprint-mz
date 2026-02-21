@@ -4,6 +4,15 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 // Cloud API types
 // ---------------------------------------------------------------------------
 
+interface CloudEventDTO {
+  id: number
+  name: string
+  externalID: string
+  startDate: string
+  endDate: string
+  testEvent: string
+}
+
 interface CloudPhotoReadyPayload {
   filePath: string
   filename: string
@@ -19,9 +28,12 @@ interface CloudConnectionStatusPayload {
 
 interface CloudAPI {
   register: (key: string) => Promise<{ success: boolean; error?: string }>
+  unregister: () => Promise<{ success: boolean }>
+  syncEvents: () => Promise<CloudEventDTO[]>
+  selectEvent: (id: number) => Promise<{ success: boolean }>
+  setApprovedOnly: (value: boolean) => Promise<{ success: boolean }>
   start: () => Promise<{ success: boolean }>
   stop: () => Promise<{ success: boolean }>
-  confirmPrint: (filename: string) => Promise<{ success: boolean; error?: string }>
   health: () => Promise<{ status: 'ok' } | null>
   status: () => Promise<{
     registered: boolean
@@ -29,6 +41,9 @@ interface CloudAPI {
     connected: boolean
     lastPollTime: number | null
     lastHealthCheckTime: number | null
+    selectedEventId: number | null
+    events: CloudEventDTO[]
+    licenseKey: string
   }>
   onPhotoReady: (callback: (payload: CloudPhotoReadyPayload) => void) => () => void
   onError: (callback: (payload: CloudErrorPayload) => void) => () => void

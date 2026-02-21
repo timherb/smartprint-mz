@@ -17,6 +17,7 @@ interface SettingsState {
   copies: number
   printCountDate: string
   printCountToday: number
+  approvedOnly: boolean
   _loaded: boolean
   setMode: (mode: 'local' | 'cloud') => void
   setLocalDirectory: (dir: string) => void
@@ -28,6 +29,7 @@ interface SettingsState {
   setPaperSize: (size: string) => void
   setPrinterPool: (pool: string[]) => void
   setCopies: (n: number) => void
+  setApprovedOnly: (value: boolean) => void
   incrementPrintCount: () => void
   loadFromMain: () => Promise<void>
 }
@@ -79,6 +81,7 @@ export const useSettings = create<SettingsState>()(
       copies: 1,
       printCountDate: '',
       printCountToday: 0,
+      approvedOnly: false,
       _loaded: false,
 
       setMode: (mode) => set({ mode }),
@@ -91,6 +94,7 @@ export const useSettings = create<SettingsState>()(
       setPaperSize: (size) => set({ paperSize: size }),
       setPrinterPool: (pool) => set({ printerPool: pool }),
       setCopies: (n) => set({ copies: Math.max(1, Math.min(10, n)) }),
+      setApprovedOnly: (value) => set({ approvedOnly: value }),
       incrementPrintCount: () => set((state) => {
         const today = new Date().toISOString().slice(0, 10)
         if (state.printCountDate === today) {

@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, screen } from 'electron'
-import { join, extname } from 'path'
-import { readFile, readdir, stat } from 'fs/promises'
+import { join, extname, basename } from 'path'
+import { readFile, readdir, stat, rename, mkdir } from 'fs/promises'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { randomUUID } from 'crypto'
@@ -214,7 +214,8 @@ app.whenReady().then(() => {
       printerPool: [] as string[],
       copies: 1,
       printCountDate: '',
-      printCountToday: 0
+      printCountToday: 0,
+      approvedOnly: false
     }
   })
 
@@ -222,9 +223,22 @@ app.whenReady().then(() => {
   // Also increment day-based print counter on completion
   setOnJobDone((job) => {
     if ((job.status === 'completed' || job.status === 'cancelled') && job.filepath) {
-      localWatcher.moveToProcessed(job.filepath).catch((err) => {
-        console.error('[onJobDone] Failed to move file to processed:', err)
-      })
+      const outputDir = settingsStore.get('localDirectory') as string
+      if (outputDir) {
+        // Move directly to {outputDir}/Printed Photos — works in both local and cloud mode
+        const printedDir = join(outputDir, 'Printed Photos')
+        const destination = join(printedDir, basename(job.filepath))
+        mkdir(printedDir, { recursive: true })
+          .then(() => rename(job.filepath!, destination))
+          .catch((err) => {
+            console.error('[onJobDone] Failed to move file to Printed Photos:', err)
+          })
+      } else {
+        // Fallback to local watcher if no output directory configured
+        localWatcher.moveToProcessed(job.filepath).catch((err) => {
+          console.error('[onJobDone] Failed to move file to processed:', err)
+        })
+      }
     }
     if (job.status === 'completed') {
       const today = new Date().toISOString().slice(0, 10)
@@ -239,9 +253,12 @@ app.whenReady().then(() => {
     }
   })
 
-  // ── Device ID — resolve at startup ──
+  // ── Device ID + watch directory — resolve at startup and share with cloud watcher ──
   getOrCreateDeviceId(settingsStore).then((id) => {
     console.log(`[DeviceID] ${id}`)
+    cloudWatcher.setDeviceId(id)
+    const dir = settingsStore.get('localDirectory') as string
+    if (dir) cloudWatcher.setWatchDirectory(dir)
   })
 
   ipcMain.handle('app:get-device-id', async () => {
@@ -365,7 +382,28 @@ app.whenReady().then(() => {
     return cloudWatcher.register(key)
   })
 
+  ipcMain.handle('cloud:unregister', () => {
+    cloudWatcher.unregister()
+    return { success: true }
+  })
+
+  ipcMain.handle('cloud:sync-events', async () => {
+    return cloudWatcher.syncEvents()
+  })
+
+  ipcMain.handle('cloud:select-event', (_event, id: number) => {
+    cloudWatcher.selectEvent(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('cloud:set-approved-only', (_event, value: boolean) => {
+    cloudWatcher.setApprovedOnly(value)
+    return { success: true }
+  })
+
   ipcMain.handle('cloud:start', async () => {
+    const dir = settingsStore.get('localDirectory') as string
+    cloudWatcher.setWatchDirectory(dir)
     await cloudWatcher.start()
     return { success: true }
   })
@@ -373,10 +411,6 @@ app.whenReady().then(() => {
   ipcMain.handle('cloud:stop', () => {
     cloudWatcher.stop()
     return { success: true }
-  })
-
-  ipcMain.handle('cloud:confirm-print', async (_event, filename: string) => {
-    return cloudWatcher.confirmPrint(filename)
   })
 
   ipcMain.handle('cloud:health', async () => {

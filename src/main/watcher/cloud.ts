@@ -1,28 +1,32 @@
 /**
  * F004 - Cloud polling service
  *
- * Polls the cloud API for new photos, downloads them to a local temp directory,
- * verifies file sizes, and emits events compatible with the local watcher pattern.
+ * Polls the cloud API for new photos, downloads them directly to the watch
+ * folder, where the local watcher picks them up for printing — same pipeline
+ * as local mode.
  */
 
 import { EventEmitter } from 'events'
 import { join } from 'path'
-import { app } from 'electron'
 import { writeFile, mkdir, stat } from 'fs/promises'
 import { createLogger, format, transports } from 'winston'
 import {
-  registerDevice,
-  fetchPhotos,
-  confirmPrint as apiConfirmPrint,
-  checkHealth as apiCheckHealth,
+  activateDevice,
+  syncEvents as apiSyncEvents,
+  getImages,
+  updateDownloaded,
   downloadFile,
   getAuthToken,
   setAuthToken,
+  clearAuthToken,
+  getLicenseKey,
+  setLicenseKey,
   getPollInterval,
   getHealthInterval,
   checkNetworkConnectivity,
-  type PhotoEntry,
-  type HealthResponse
+  ApiClientError,
+  type CloudEvent,
+  type ImageEntry
 } from '../api'
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
@@ -52,6 +56,9 @@ export interface CloudWatcherStatus {
   connected: boolean
   lastPollTime: number | null
   lastHealthCheckTime: number | null
+  selectedEventId: number | null
+  events: CloudEvent[]
+  licenseKey: string
 }
 
 // ─── Registration Key Validation ──────────────────────────────────────────────
@@ -71,12 +78,16 @@ export class CloudWatcher extends EventEmitter {
   private connected = false
   private lastPollTime: number | null = null
   private lastHealthCheckTime: number | null = null
-  private downloadDir: string
+  private watchDirectory: string = ''
   private processedFiles: Set<string> = new Set()
+  private selectedEventId: number | null = null
+  private events: CloudEvent[] = []
+  private approvedOnly: boolean = false
+  private deviceId: string = ''
+  private pollGeneration: number = 0
 
   constructor() {
     super()
-    this.downloadDir = join(app.getPath('temp'), 'smart-print-cloud')
   }
 
   // ─── Event Typing Overrides ───────────────────────────────────────────────
@@ -105,8 +116,23 @@ export class CloudWatcher extends EventEmitter {
   // ─── Public Methods ───────────────────────────────────────────────────────
 
   /**
-   * Register this device with a 12-digit registration key.
-   * Stores the received auth token in electron-store.
+   * Set the hardware device ID (called from main process at startup).
+   */
+  setDeviceId(id: string): void {
+    this.deviceId = id
+  }
+
+  /**
+   * Set the watch directory where downloaded images are placed.
+   * The local watcher monitors this folder and handles printing.
+   */
+  setWatchDirectory(dir: string): void {
+    this.watchDirectory = dir
+  }
+
+  /**
+   * Activate this device with a license key.
+   * Calls /device/activate and stores the received auth token.
    */
   async register(key: string): Promise<{ success: boolean; error?: string }> {
     if (!isValidRegistrationKey(key)) {
@@ -116,21 +142,89 @@ export class CloudWatcher extends EventEmitter {
     }
 
     try {
-      logger.info(`Registering device with key: ${key.slice(0, 4)}****${key.slice(-4)}`)
-      const response = await registerDevice(key)
+      logger.info(`Activating device with key: ${key.slice(0, 4)}****${key.slice(-4)}`)
+      const response = await activateDevice(key, this.deviceId)
+      logger.info(`Activate response keys: ${Object.keys(response).join(', ')}`)
+      logger.info(`Token received: ${response.token ? response.token.slice(0, 20) + '...' : 'EMPTY/MISSING'}`)
+      if (!response.token) {
+        return { success: false, error: 'Activation succeeded but no token returned' }
+      }
       setAuthToken(response.token)
-      logger.info('Device registered successfully — token stored')
+      setLicenseKey(key)
+      logger.info('Device activated successfully — token and license key stored')
       return { success: true }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))
-      logger.error(`Registration failed: ${error.message}`)
+      logger.error(`Activation failed: ${error.message}`)
       this.emit('cloud-error', error)
       return { success: false, error: error.message }
     }
   }
 
   /**
+   * Unregister this device — stops polling and clears stored token and license key.
+   */
+  unregister(): void {
+    this.stop()
+    this.selectedEventId = null
+    this.events = []
+    clearAuthToken()
+    setLicenseKey('')
+    logger.info('Device unregistered — token and license key cleared')
+  }
+
+  /**
+   * Sync today's events from the API.
+   * Returns the list of events for display in the event selector.
+   */
+  async syncEvents(): Promise<CloudEvent[]> {
+    const token = getAuthToken()
+    if (!token) {
+      const msg = 'Cannot sync events: no auth token. Register first.'
+      logger.error(msg)
+      throw new Error(msg)
+    }
+
+    try {
+      logger.info('Syncing events from API')
+      const events = await apiSyncEvents()
+      this.events = events
+      logger.info(`Synced ${events.length} event(s)`)
+      return events
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      logger.error(`Event sync failed: ${error.message}`)
+      this.emit('cloud-error', error)
+      throw error
+    }
+  }
+
+  /**
+   * Set the active event ID for image polling.
+   */
+  selectEvent(id: number): void {
+    this.selectedEventId = id
+    const event = this.events.find((e) => e.id === id)
+    logger.info(`Event selected: ${event?.name ?? id} (id=${id})`)
+  }
+
+  /**
+   * Set whether to fetch only approved images.
+   * If polling is active, restarts polling so the new filter takes effect immediately.
+   */
+  setApprovedOnly(value: boolean): void {
+    if (this.approvedOnly === value) return
+    this.approvedOnly = value
+    logger.info(`Approved-only filter changed to: ${value}`)
+    if (this.pollTimer !== null) {
+      logger.info('Restarting polling to apply new approved-only filter')
+      void this.start()
+    }
+  }
+
+  /**
    * Start polling for new photos and running health checks.
+   * Requires an event to be selected first.
    */
   async start(): Promise<void> {
     const token = getAuthToken()
@@ -141,16 +235,28 @@ export class CloudWatcher extends EventEmitter {
       return
     }
 
-    // Ensure download directory exists
-    await this.ensureDownloadDir()
+    if (this.selectedEventId === null) {
+      const error = new Error('Cannot start polling: no event selected. Select an event first.')
+      logger.error(error.message)
+      this.emit('cloud-error', error)
+      return
+    }
+
+    if (!this.watchDirectory) {
+      const error = new Error('Cannot start polling: no output folder configured. Set a folder in Settings.')
+      logger.error(error.message)
+      this.emit('cloud-error', error)
+      return
+    }
 
     // Clear any existing timers
     this.stop()
 
-    logger.info('Starting cloud polling service')
+    logger.info(`Starting cloud polling service for event ${this.selectedEventId}`)
 
-    // Perform an initial poll immediately
-    await this.poll()
+    // Fire initial poll without awaiting — same behaviour as recurring polls,
+    // prevents start() from blocking until 1000 images download
+    void this.poll()
 
     // Set up recurring poll timer
     const pollInterval = getPollInterval()
@@ -159,8 +265,8 @@ export class CloudWatcher extends EventEmitter {
     }, pollInterval)
     logger.info(`Photo polling interval: ${pollInterval}ms`)
 
-    // Perform an initial health check immediately
-    await this.performHealthCheck()
+    // Fire initial health check without awaiting
+    void this.performHealthCheck()
 
     // Set up recurring health check timer
     const healthInterval = getHealthInterval()
@@ -184,42 +290,16 @@ export class CloudWatcher extends EventEmitter {
     }
     this.isPolling = false
     this.processedFiles.clear()
+    this.pollGeneration++
     logger.info('Cloud polling service stopped')
-  }
-
-  /**
-   * Confirm that a photo was printed successfully.
-   */
-  async confirmPrint(filename: string): Promise<{ success: boolean; error?: string }> {
-    const token = getAuthToken()
-    if (!token) {
-      return { success: false, error: 'No auth token available' }
-    }
-
-    try {
-      logger.info(`Confirming print for: ${filename}`)
-      const response = await apiConfirmPrint(token, filename)
-      return { success: response.success }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      logger.error(`Print confirmation failed for ${filename}: ${error.message}`)
-      this.emit('cloud-error', error)
-      return { success: false, error: error.message }
-    }
   }
 
   /**
    * Perform a health check against the API.
    */
-  async checkHealth(): Promise<HealthResponse | null> {
-    try {
-      const response = await apiCheckHealth()
-      return response
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      logger.error(`Health check failed: ${error.message}`)
-      return null
-    }
+  async checkHealth(): Promise<{ status: 'ok' } | null> {
+    const isConnected = await checkNetworkConnectivity()
+    return isConnected ? { status: 'ok' } : null
   }
 
   /**
@@ -231,19 +311,22 @@ export class CloudWatcher extends EventEmitter {
       polling: this.pollTimer !== null,
       connected: this.connected,
       lastPollTime: this.lastPollTime,
-      lastHealthCheckTime: this.lastHealthCheckTime
+      lastHealthCheckTime: this.lastHealthCheckTime,
+      selectedEventId: this.selectedEventId,
+      events: this.events,
+      licenseKey: getLicenseKey()
     }
   }
 
   // ─── Private Methods ──────────────────────────────────────────────────────
 
-  private async ensureDownloadDir(): Promise<void> {
+  private async ensureWatchDir(): Promise<void> {
     try {
-      await mkdir(this.downloadDir, { recursive: true })
-      logger.info(`Download directory ready: ${this.downloadDir}`)
+      await mkdir(this.watchDirectory, { recursive: true })
+      logger.info(`Watch directory ready: ${this.watchDirectory}`)
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))
-      logger.error(`Failed to create download directory: ${error.message}`)
+      logger.error(`Failed to create watch directory: ${error.message}`)
       throw error
     }
   }
@@ -262,32 +345,53 @@ export class CloudWatcher extends EventEmitter {
       return
     }
 
+    if (this.selectedEventId === null) {
+      logger.warn('No event selected — skipping poll')
+      return
+    }
+
     this.isPolling = true
+    const generation = this.pollGeneration
 
     try {
-      const { photos } = await fetchPhotos(token)
+      const images = await getImages(this.selectedEventId, this.approvedOnly)
       this.lastPollTime = Date.now()
 
-      if (photos.length === 0) {
-        logger.info('No new photos available')
+      if (images.length === 0) {
+        logger.info('No new images available')
         this.isPolling = false
         return
       }
 
-      logger.info(`Found ${photos.length} photo(s) to download`)
+      logger.info(`Found ${images.length} image(s) to download`)
 
-      for (const photo of photos) {
+      for (const image of images) {
+        // Stop downloading if a restart/stop was triggered since this poll began
+        if (this.pollGeneration !== generation) {
+          logger.info('Poll cancelled — newer poll generation detected')
+          break
+        }
+
         // Skip already processed files in this session
-        if (this.processedFiles.has(photo.filename)) {
+        if (this.processedFiles.has(image.fileName)) {
           continue
         }
 
         try {
-          await this.downloadAndVerify(photo)
+          await this.downloadAndVerify(image)
+          // Mark downloaded immediately after each verified file — if app crashes
+          // mid-batch, only the current image needs re-downloading
+          await this.markDownloaded([image.fileName])
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err))
-          logger.error(`Failed to process photo ${photo.filename}: ${error.message}`)
+          logger.error(`Failed to process image ${image.fileName}: ${error.message}`)
           this.emit('cloud-error', error)
+          // Abort the entire poll cycle on network errors — no point retrying
+          // 1000 images individually when the connection is down
+          if (error instanceof ApiClientError && error.isNetworkError) {
+            logger.warn('Network error detected — aborting poll cycle')
+            break
+          }
         }
       }
     } catch (err) {
@@ -299,32 +403,58 @@ export class CloudWatcher extends EventEmitter {
     }
   }
 
-  private async downloadAndVerify(photo: PhotoEntry): Promise<void> {
-    const filePath = join(this.downloadDir, photo.filename)
+  private async downloadAndVerify(image: ImageEntry): Promise<void> {
+    await this.ensureWatchDir()
+    const filePath = join(this.watchDirectory, image.fileName)
 
-    logger.info(`Downloading: ${photo.filename} (${photo.sizeBytes} bytes)`)
+    logger.info(`Downloading: ${image.fileName} (${image.bytes} bytes)`)
 
     // Download the file
-    const buffer = await downloadFile(photo.url)
+    const buffer = await downloadFile(image.url)
 
     // Write to disk
     await writeFile(filePath, buffer)
 
     // Verify file size matches API-provided size
     const fileStat = await stat(filePath)
-    if (fileStat.size !== photo.sizeBytes) {
+    if (fileStat.size !== image.bytes) {
       const error = new Error(
-        `Size mismatch for ${photo.filename}: expected ${photo.sizeBytes} bytes, got ${fileStat.size} bytes`
+        `Size mismatch for ${image.fileName}: expected ${image.bytes} bytes, got ${fileStat.size} bytes`
       )
       logger.error(error.message)
       throw error
     }
 
-    logger.info(`Download verified: ${photo.filename} (${fileStat.size} bytes)`)
+    logger.info(`Download verified: ${image.fileName} (${fileStat.size} bytes)`)
 
     // Mark as processed and emit event
-    this.processedFiles.add(photo.filename)
-    this.emit('photo-ready', filePath, photo.filename)
+    this.processedFiles.add(image.fileName)
+    this.emit('photo-ready', filePath, image.fileName)
+  }
+
+  /**
+   * Mark a batch of filenames as downloaded on the API.
+   * Retries up to 3 times on failure. If all retries fail, logs and continues
+   * (printing is not blocked; files may be re-served on next session).
+   */
+  private async markDownloaded(fileNames: string[]): Promise<void> {
+    const maxAttempts = 3
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await updateDownloaded(fileNames)
+        logger.info(`Marked ${fileNames.length} file(s) as downloaded`)
+        return
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err))
+        if (attempt < maxAttempts) {
+          logger.warn(`updateDownloaded attempt ${attempt}/${maxAttempts} failed: ${error.message} — retrying in 500ms`)
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        } else {
+          logger.error(`updateDownloaded failed after ${maxAttempts} attempts: ${error.message}`)
+          this.emit('cloud-error', new Error(`Failed to mark images as downloaded: ${error.message}`))
+        }
+      }
+    }
   }
 
   private async performHealthCheck(): Promise<void> {

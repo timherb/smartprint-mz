@@ -44,7 +44,7 @@ Smart Print is a desktop photo printing management application for live events. 
 | Project Scaffolding | Complete | Electron + React + TS + Tailwind v4 |
 | Printer Integration | Complete | Discovery, queue (PowerShell/.NET), health, load balancing |
 | Local File Monitoring | Complete | Chokidar watcher, EOF marker verification, auto-print |
-| Cloud API Integration | Complete | Axios client, polling, registration, retry logic |
+| Cloud API Integration | Complete | /device/activate, /device/syncevents, /image/images, /image/updatedownloaded — live and tested |
 | UI - Design Concept D | Active | "Printing Press" skeuomorphic design with theme system |
 | UI - Design Concept B3 | Reference | "Soft Studio" kept for reference, not active |
 | Zustand Stores | Complete | settings, printer, watcher, cloud, gallery, theme, pressTheme |
@@ -57,11 +57,11 @@ Smart Print is a desktop photo printing management application for live events. 
 
 ### Current Priorities
 
-1. Confirm physical print quality on DS40 in person
-2. Cloud event selection flow (waiting on YAML spec from architecture team)
-3. App icon cleanup (transparent background)
-4. Splash screen
-5. Theme refinements based on in-person testing
+1. Test full cloud flow end-to-end with printer connected (download → watch folder → print → gallery)
+2. Confirm production API URL (`https://smartprint.smartactivator-api.net`) is stable
+3. Remove debug token logging from client.ts before production build
+4. App icon cleanup (transparent background)
+5. Splash screen
 
 ### Known Issues
 
@@ -157,12 +157,15 @@ smart-print/
 
 - **IPC Communication:** All main↔renderer via contextBridge (no nodeIntegration)
 - **Two Modes:** "Local Print" (file watcher) and "Cloud Print" (API polling)
+- **Unified Print Pipeline:** Both modes use the same watch folder → print → Printed Photos flow. Cloud mode downloads files into the watch folder; local watcher handles printing in both modes.
 - **File Verification:** JPEG EOI / PNG IEND marker verification before printing
 - **Multi-Printer:** Round-robin load balancing across up to 4 printers with fallback
 - **Settings Persistence:** Zustand + electron-store via IPC (not localStorage)
 - **Auto-Print:** Always enabled, no toggle. New photos auto-submit to print queue.
 - **Explicit mainWindowRef:** Printer manager and health monitor use stored ref, never `getAllWindows()[0]`
 - **Performance:** LRU image cache (50 entries), health check caching, job queue eviction (max 200)
+- **Poll Cancellation:** Generation counter — `stop()` increments counter; download loop checks before each image and aborts if cancelled (handles settings changes mid-download)
+- **Cloud Auth:** Token + license key stored in `cloud-config` electron-store. Token is NOT cleared on 401 (prevents wiping valid token on downstream failures).
 
 ---
 
@@ -212,15 +215,12 @@ npm run typecheck    # TypeScript check (node + web)
 ## Cloud API
 
 - **App ID:** `5174A6DD-55C9-4718-821C-21D26FB348BC` (defined in `src/main/api/endpoints.ts` as `APP_ID`)
-
-## Upcoming: Cloud Event Selection Flow
-
-Stashed plan at `~/.claude/plans/dapper-roaming-peacock.md`. Waiting for YAML spec from architecture team. Key points:
-- Registration returns token + events list
-- User must select an event before polling starts
-- Event ID is required parameter for photo fetch
-- Persistent modal for event selection
-- Auto-print paused until event selected
+- **Base URL:** `https://smartprint.smartactivator-api.net` (stored in `cloud-config` electron-store)
+- **Auth:** Opaque bearer token returned by `/device/activate`, stored in `cloud-config.cloudAuthToken`
+- **License key:** Stored in `cloud-config.cloudLicenseKey`, displayed in Settings for support reference
+- **Endpoints:** `/device/activate` (no auth), `/device/syncevents`, `/image/images`, `/image/updatedownloaded`
+- **Event selection:** Required each session — not persisted across restarts. Modal appears automatically.
+- **Approved filter:** `approved: true` sent when checkbox enabled; field omitted entirely when disabled (returns all images)
 
 ---
 

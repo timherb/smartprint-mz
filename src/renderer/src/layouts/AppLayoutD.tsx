@@ -26,6 +26,7 @@ import MonitorD from '@/screens/MonitorD'
 import GalleryD from '@/screens/GalleryD'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ToastContainer } from '@/components/ToastContainer'
+import { EventSelectorModal } from '@/components/EventSelectorModal'
 
 type Page = 'settings' | 'monitor' | 'gallery'
 
@@ -330,10 +331,16 @@ export default function AppLayoutD(): React.JSX.Element {
     if (settings.printerPool.length > 0) {
       usePrinter.getState().setPool(settings.printerPool)
     }
-    if (settings.mode === 'local' && settings.localDirectory) {
+    // Always start local watcher if folder is configured — handles printing in both modes
+    if (settings.localDirectory) {
       useWatcher.getState().start(settings.localDirectory)
     }
     usePrinter.getState().startMonitor()
+
+    // Run an initial connectivity check on startup regardless of polling state
+    if (settings.mode === 'cloud') {
+      useCloud.getState().checkHealth()
+    }
 
     // Toast on print failures
     const unsubFailures = usePrinter.subscribe((state) => {
@@ -553,6 +560,9 @@ export default function AppLayoutD(): React.JSX.Element {
 
       {/* ---- Toast notifications ---- */}
       <ToastContainer />
+
+      {/* ---- Cloud event selector (persistent modal, blocks cloud mode until event chosen) ---- */}
+      <EventSelectorModal />
     </div>
   )
 }

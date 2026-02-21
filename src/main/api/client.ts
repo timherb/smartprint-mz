@@ -13,15 +13,19 @@ import ElectronStoreModule from 'electron-store'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ElectronStore = ((ElectronStoreModule as any).default || ElectronStoreModule) as typeof ElectronStoreModule
 import { createLogger, format, transports } from 'winston'
+import { app } from 'electron'
 import {
   ENDPOINTS,
-  RegisterRequest,
-  RegisterResponse,
-  GetPhotosParams,
-  GetPhotosResponse,
-  ConfirmPrintRequest,
-  ConfirmPrintResponse,
-  HealthResponse
+  ActivateRequest,
+  ActivateResponse,
+  SyncEventsRequest,
+  SyncEventsResponse,
+  CloudEvent,
+  GetImagesRequest,
+  GetImagesResponse,
+  ImageEntry,
+  UpdateDownloadedRequest,
+  UpdateDownloadedResponse
 } from './endpoints'
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
@@ -42,15 +46,17 @@ interface CloudStoreSchema extends Record<string, unknown> {
   cloudApiBaseUrl: string
   cloudPollIntervalMs: number
   cloudHealthIntervalMs: number
+  cloudLicenseKey: string
 }
 
 const store = new ElectronStore<CloudStoreSchema>({
   name: 'cloud-config',
   defaults: {
     cloudAuthToken: '',
-    cloudApiBaseUrl: 'https://api.smartprint.cloud',
+    cloudApiBaseUrl: 'https://smartprint.smartactivator-api.net',
     cloudPollIntervalMs: 15000,
-    cloudHealthIntervalMs: 60000
+    cloudHealthIntervalMs: 60000,
+    cloudLicenseKey: ''
   }
 })
 
@@ -110,6 +116,14 @@ export function setBaseUrl(url: string): void {
   store.set('cloudApiBaseUrl', url)
 }
 
+export function getLicenseKey(): string {
+  return store.get('cloudLicenseKey')
+}
+
+export function setLicenseKey(key: string): void {
+  store.set('cloudLicenseKey', key)
+}
+
 export function getPollInterval(): number {
   return store.get('cloudPollIntervalMs')
 }
@@ -138,9 +152,10 @@ function createApiClient(): AxiosInstance {
       const token = getAuthToken()
       if (token) {
         config.headers.set('Authorization', `Bearer ${token}`)
+        logger.info(`→ ${config.method?.toUpperCase()} ${config.baseURL}${config.url} [token: ${token.slice(0, 20)}...]`)
+      } else {
+        logger.warn(`→ ${config.method?.toUpperCase()} ${config.baseURL}${config.url} [NO TOKEN]`)
       }
-
-      logger.info(`→ ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`)
       return config
     },
     (error: AxiosError) => {
@@ -165,8 +180,10 @@ function createApiClient(): AxiosInstance {
         )
 
         if (status === 401) {
-          logger.warn('Auth token expired or invalid — clearing stored token')
-          clearAuthToken()
+          // Note: do NOT auto-clear token here — a 401 on one endpoint (e.g. syncevents)
+          // would wipe a valid token from a just-completed activation.
+          // Callers are responsible for handling 401 and clearing if appropriate.
+          logger.warn('401 received — token may be expired or invalid')
         }
       } else if (error.code === 'ECONNABORTED') {
         logger.error(`Request timeout: ${error.config?.url}`)
@@ -233,48 +250,77 @@ function toApiClientError(err: Error): ApiClientError {
 
 export async function checkNetworkConnectivity(): Promise<boolean> {
   try {
-    await axios.get(getBaseUrl() + ENDPOINTS.HEALTH, { timeout: 5000 })
+    await axios.get(getBaseUrl(), {
+      timeout: 5000,
+      // Any HTTP response (even 4xx/5xx) means the server is reachable
+      validateStatus: () => true
+    })
     return true
   } catch {
+    // Only network-level errors (ECONNREFUSED, timeout, etc.) reach here
     return false
   }
 }
 
 // ─── Typed API Methods ────────────────────────────────────────────────────────
 
-export async function registerDevice(
-  registrationKey: string
-): Promise<RegisterResponse> {
-  // deviceId will be added when cloud event selection flow is wired up
-  const payload: Omit<RegisterRequest, 'deviceId'> = { registrationKey }
+export async function activateDevice(
+  licenseKey: string,
+  deviceCode: string
+): Promise<ActivateResponse> {
+  const { APP_ID } = await import('./endpoints')
+  const payload: ActivateRequest = {
+    appID: APP_ID,
+    licenseKey,
+    deviceCode,
+    swVersion: app.getVersion(),
+    osVersion: process.getSystemVersion(),
+    name: `SmartPrint-${deviceCode.slice(0, 8)}`,
+    platform: process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux'
+  }
+  // Activate endpoint has no auth requirement — post without Bearer token
   const response = await withRetry(() =>
-    apiClient.post<RegisterResponse>(ENDPOINTS.REGISTER, payload)
+    axios.post<ActivateResponse>(getBaseUrl() + ENDPOINTS.ACTIVATE, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 30000
+    })
   )
   return response.data
 }
 
-export async function fetchPhotos(token: string): Promise<GetPhotosResponse> {
-  const params: GetPhotosParams = { token }
+export async function syncEvents(): Promise<CloudEvent[]> {
+  const payload: SyncEventsRequest = {
+    osVersion: process.getSystemVersion(),
+    swVersion: app.getVersion()
+  }
   const response = await withRetry(() =>
-    apiClient.get<GetPhotosResponse>(ENDPOINTS.PHOTOS, { params })
+    apiClient.post<SyncEventsResponse>(ENDPOINTS.SYNC_EVENTS, payload)
   )
-  return response.data
+  return response.data.events
 }
 
-export async function confirmPrint(
-  token: string,
-  filename: string
-): Promise<ConfirmPrintResponse> {
-  const payload: ConfirmPrintRequest = { token, filename }
+export async function getImages(
+  eventID: number,
+  approvedOnly: boolean
+): Promise<ImageEntry[]> {
+  const payload: GetImagesRequest = {
+    eventID,
+    downloaded: false,
+    ...(approvedOnly && { approved: true })
+  }
   const response = await withRetry(() =>
-    apiClient.post<ConfirmPrintResponse>(ENDPOINTS.CONFIRM_PRINT, payload)
+    apiClient.post<GetImagesResponse>(ENDPOINTS.IMAGES, payload)
   )
-  return response.data
+  return response.data.images
 }
 
-export async function checkHealth(): Promise<HealthResponse> {
-  const response = await withRetry(() =>
-    apiClient.get<HealthResponse>(ENDPOINTS.HEALTH)
+export async function updateDownloaded(
+  fileNames: string[]
+): Promise<UpdateDownloadedResponse> {
+  const payload: UpdateDownloadedRequest = { fileNames }
+  const response = await withRetry(
+    () => apiClient.post<UpdateDownloadedResponse>(ENDPOINTS.UPDATE_DOWNLOADED, payload),
+    { maxRetries: 3, baseDelayMs: 500 }
   )
   return response.data
 }

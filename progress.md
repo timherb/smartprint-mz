@@ -1,6 +1,80 @@
 # Smart Print - Development Log
 
 ================================================================================
+## 2026-02-21 Session (Cloud API Integration — Full Flow)
+================================================================================
+
+### Tasks Completed
+- [x] Replaced legacy API contract (`/register`, `/photos`, `/photos/confirm`, `/health`) with new spec
+- [x] Implemented `/device/activate` endpoint — replaced old `/register`, sends appID, licenseKey, deviceCode, swVersion, osVersion, platform
+- [x] Implemented `/device/syncevents` — fetches today's events for event selection
+- [x] Implemented `/image/images` — fetches undownloaded images by eventID with approved filter
+- [x] Implemented `/image/updatedownloaded` — marks images as downloaded per-image immediately after verification
+- [x] Added `EventSelectorModal` — persistent blocking modal that appears after registration, auto-syncs events, requires event selection before polling starts
+- [x] Added register/unregister flow — UNREGISTER button clears token and license key, allows re-registration
+- [x] License key persisted to `cloud-config.json` and displayed in Settings for support reference
+- [x] Approved Images Only checkbox — persisted setting, filters `/image/images` request; omits field when unchecked rather than sending false
+- [x] Active Event display in Settings — shows selected event name with CHANGE EVENT button
+- [x] Unified printing pipeline — cloud downloads now go directly to the watch folder; local watcher handles printing in both modes (eliminated duplicate `photo-ready → submitJob` pipeline)
+- [x] Local watcher now starts in both local and cloud modes (always watches the folder if configured)
+- [x] Output folder now shown in Settings for cloud mode (labeled "OUTPUT FOLDER")
+- [x] `setOnJobDone` — files now moved directly via `fs.rename` to `{localDirectory}/Printed Photos/` in both modes, bypassing the local watcher dependency
+- [x] Poll cancellation via generation counter — `stop()` bumps `pollGeneration`; download loop checks before each image and breaks if cancelled
+- [x] Network error abort — first network error during download loop aborts entire poll cycle (avoids 1000-image retry storm)
+- [x] `setApprovedOnly` auto-restarts polling if active (change takes effect immediately)
+- [x] Saving settings now pushes `approvedOnly` to CloudWatcher before restart
+- [x] Fixed `start()` blocking — initial poll and health check now fire with `void` (non-blocking); save/modal no longer freeze waiting for poll to complete
+- [x] Fixed EventSelectorModal "STARTING..." stuck state — stale local state cleared when modal re-opens
+- [x] Fixed base URL switching — API URL stored in electron-store, overrides default; working URL is `https://smartprint.smartactivator-api.net`
+- [x] Added token logging (first 20 chars) to confirm auth header is being sent
+- [x] Removed auto-clear of auth token on 401 — prevented token being wiped by failed syncevents call after registration
+- [x] Initial connectivity check on startup for cloud mode (LED no longer stuck offline)
+- [x] Cloud errors now shown as toast notifications in the UI
+- [x] Added sourcemaps to electron-vite config for VS Code debugger support
+- [x] VS Code launch config updated to attach mode with correct sourcemap paths
+- [x] `image.uri` → `image.url` field name fix (actual API response uses `url`)
+- [ ] Gallery still needs testing with a connected printer (files should now land in Printed Photos after printing)
+
+### Key Decisions
+- **Unified pipeline over dual pipeline** — cloud watcher now drops files into the watch folder instead of emitting `photo-ready` directly. Local watcher handles printing/moving identically in both modes. Eliminates duplicate code and makes gallery work naturally.
+- **Per-image `updateDownloaded`** — called immediately after each verified download rather than batching. On crash, only the current in-flight image needs re-downloading.
+- **Generation counter for poll cancellation** — `stop()` bumps a counter; the download loop checks it before each image. Correctly aborts a 1000-image loop when settings change mid-download.
+- **`void this.poll()` in `start()`** — initial poll fires without blocking. Previously `await this.poll()` would block `start()` for the entire duration of downloading 1000 images, freezing save/modal.
+- **`approved` field omitted (not `false`) when unchecked** — sending `false` would return only unapproved images. Omitting the field returns all images.
+- **Registration state in `useCloud` not `useSettings`** — EventSelectorModal checks `useCloud.registered` (set immediately after activation) rather than `useSettings.cloudRegistered` (persisted but not updated until save).
+- **Restart polling on `setApprovedOnly` change** — if filter changes mid-download-loop, `stop()` cancels it via generation counter and `start()` fires fresh with correct filter.
+
+### Summary
+Full cloud API integration implemented and tested end-to-end. Replaced the placeholder legacy API with the new SmartActivator spec (`/device/activate`, `/device/syncevents`, `/image/images`, `/image/updatedownloaded`). Built event selection UI, register/unregister flow, and approved-only filtering. Unified the printing pipeline so cloud and local modes share the same watch folder → print → gallery flow, eliminating duplicate code. Fixed multiple blocking issues (frozen save dialog, stuck STARTING modal, poll not cancelling on settings change, token being wiped after registration). Connected to live API and verified: registration, event sync, image download, and API mark-as-downloaded all working.
+
+### Files Modified
+- `src/main/api/endpoints.ts` — New types: ActivateRequest/Response, CloudEvent, ImageEntry, SyncEvents, GetImages, UpdateDownloaded; ACTIVATE/SYNC_EVENTS/IMAGES/UPDATE_DOWNLOADED endpoints
+- `src/main/api/client.ts` — New functions: activateDevice, syncEvents, getImages, updateDownloaded; getLicenseKey/setLicenseKey; token logging; removed clearAuthToken on 401; checkNetworkConnectivity uses validateStatus
+- `src/main/api/index.ts` — Updated barrel exports
+- `src/main/watcher/cloud.ts` — Full rework: watchDirectory replaces temp dir, setWatchDirectory/setDeviceId/setApprovedOnly/selectEvent/syncEvents/unregister methods, generation counter, network abort, non-blocking start, per-image markDownloaded
+- `src/main/index.ts` — cloud:unregister/sync-events/select-event/set-approved-only IPC handlers; setWatchDirectory at startup; local watcher started in both modes; setOnJobDone uses direct fs.rename
+- `src/preload/index.ts` + `index.d.ts` — Added syncEvents, selectEvent, setApprovedOnly, unregister to cloud API surface; CloudEventDTO type; removed confirmPrint
+- `src/renderer/src/stores/cloud.ts` — Added events, selectedEventId, licenseKey state; syncEvents/selectEvent/clearEventSelection/unregister actions; removed onPhotoReady→submitJob; cloud errors → toast
+- `src/renderer/src/stores/settings.ts` — Added approvedOnly (persisted)
+- `src/renderer/src/screens/SettingsD.tsx` — Register/unregister toggle; active license key display; event display + CHANGE EVENT button; approved-only checkbox; output folder in cloud mode; handleSave starts watcher in both modes
+- `src/renderer/src/layouts/AppLayoutD.tsx` — EventSelectorModal rendered; local watcher starts regardless of mode; initial checkHealth on cloud mode startup
+- `src/renderer/src/components/EventSelectorModal.tsx` — NEW: blocking event selection modal with auto-sync, refresh, TEST badge, stale state cleanup
+- `electron.vite.config.ts` — sourcemap: true for main and preload
+- `.vscode/launch.json` — Attach mode debugger config
+
+### Outstanding Items
+- [ ] Test gallery end-to-end with printer connected (files should move to Printed Photos after print)
+- [ ] Confirm `https://smartprint.smartactivator-api.net` is the permanent production URL
+- [ ] Remove debug token logging from client.ts request interceptor before production
+- [ ] App icon cleanup (transparent background) — from prior session backlog
+- [ ] Splash screen — from prior session backlog
+
+### Next Session
+- Connect a printer and verify full flow: cloud download → watch folder → print → Printed Photos → gallery
+- The output folder must be set in Settings for cloud mode before polling can start
+- Token and license key persist in `~/Library/Application Support/smart-print/cloud-config.json`
+
+================================================================================
 ## 2026-02-15 Session (Windows Testing, Print Pipeline, Design Concept D)
 ================================================================================
 

@@ -1,0 +1,270 @@
+openapi: 3.0.3
+info:
+  title: SmartActivator API - New Endpoints
+  description: Documentation for Event Sync and Image Download endpoints
+  version: 2.0.0
+
+servers:
+  - url: https://smartprint.smartactivator-api.net
+    description: API Gateway (routes to dev/staging/prod backends)
+
+security:
+  - BearerAuth: []
+
+paths:
+  /device/syncevents:
+    post:
+      summary: Sync Events for Today
+      description: Retrieves all events for the current day (Pacific Standard Time)
+      tags:
+        - Events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                osVersion:
+                  type: string
+                  example: "iOS 16.0"
+                swVersion:
+                  type: string
+                  example: "2.0.0"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        externalID:
+                          type: string
+                        startDate:
+                          type: string
+                        endDate:
+                          type: string
+                        testEvent:
+                          type: string
+                  status:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Error
+
+  /device/activate:
+    post:
+      summary: Activate Device
+      description: Activates a device against a license key and returns a bearer token for subsequent authenticated requests
+      tags:
+        - Device
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - appID
+              properties:
+                appID:
+                  type: string
+                  description: Application identifier used to determine device type
+                  example: "6C56857A-EC84-4913-99BF-2E61A6FC1C4A"
+                deviceCode:
+                  type: string
+                  description: Unique device identifier
+                  example: "ABC123XYZ"
+                licenseKey:
+                  type: string
+                  description: License key to activate the device against
+                  example: "XXXX-XXXX-XXXX-XXXX"
+                swVersion:
+                  type: string
+                  description: Software version of the app
+                  example: "2.0.0"
+                osVersion:
+                  type: string
+                  description: Operating system version
+                  example: "iOS 16.0"
+                name:
+                  type: string
+                  description: Display name for the device
+                  example: "iPad Station 1"
+                platform:
+                  type: string
+                  description: Device platform
+                  example: "iOS"
+      responses:
+        '200':
+          description: Device successfully activated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Bearer token to use for all subsequent authenticated requests
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  userID:
+                    type: string
+                    nullable: true
+                  licenseInfo:
+                    type: object
+                    nullable: true
+                    properties:
+                      name:
+                        type: string
+                        description: License description
+                      programName:
+                        type: string
+                      agencyName:
+                        type: string
+                      startDate:
+                        type: string
+                        description: License start date (MM-dd-yyyy)
+                        example: "01-01-2025"
+                      endDate:
+                        type: string
+                        description: License end date (MM-dd-yyyy)
+                        example: "12-31-2025"
+                      supportedDevices:
+                        type: integer
+                        description: Total number of devices the license supports
+                      activatedDevices:
+                        type: integer
+                        description: Number of devices currently activated
+                  status:
+                    type: integer
+                    example: 0
+        '401':
+          description: Unauthorized — possible reasons include invalid app ID, device locked out, license expired/full/invalid/not activated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+        '500':
+          description: Internal Error
+
+  /image/images:
+    post:
+      summary: Get Images (Download)
+      description: Retrieves images by event ID, download status, and optional approval status
+      tags:
+        - Images
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - eventID
+                - downloaded
+              properties:
+                eventID:
+                  type: integer
+                  example: 12345
+                approved:
+                  type: boolean
+                  nullable: true
+                  example: true
+                downloaded:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  images:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uri:
+                          type: string
+                        height:
+                          type: integer
+                        width:
+                          type: integer
+                        fileName:
+                          type: string
+                        bytes:
+                          type: integer
+                  status:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Error
+
+  /image/updatedownloaded:
+    post:
+      summary: Set Download Status
+      description: Marks images as downloaded by filename
+      tags:
+        - Images
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fileNames
+              properties:
+                fileNames:
+                  type: array
+                  items:
+                    type: string
+                  example: ["image1.jpg", "image2.jpg"]
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 1
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Error
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Device authentication token
+
+tags:
+  - name: Device
+    description: Device activation and management
+  - name: Events
+    description: Event synchronization
+  - name: Images
+    description: Image download management

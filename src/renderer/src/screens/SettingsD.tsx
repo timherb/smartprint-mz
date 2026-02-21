@@ -33,6 +33,8 @@ import {
   Copy,
   Palette,
   Fingerprint,
+  Calendar,
+  XCircle,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -552,7 +554,16 @@ export default function SettingsD(): React.JSX.Element {
   // Cloud store
   const cloudRegistered = useCloud((s) => s.registered)
   const cloudRegister = useCloud((s) => s.register)
+  const cloudUnregister = useCloud((s) => s.unregister)
   const cloudCheckHealth = useCloud((s) => s.checkHealth)
+  const selectedEventId = useCloud((s) => s.selectedEventId)
+  const selectedEventName = useCloud((s) => s.selectedEventName)
+  const clearEventSelection = useCloud((s) => s.clearEventSelection)
+  const licenseKey = useCloud((s) => s.licenseKey)
+
+  // Approved-only setting (persisted)
+  const approvedOnly = useSettings((s) => s.approvedOnly)
+  const setApprovedOnly = useSettings((s) => s.setApprovedOnly)
 
   // Local UI state
   const [enabledFormats, setEnabledFormats] = useState<Set<string>>(
@@ -560,6 +571,8 @@ export default function SettingsD(): React.JSX.Element {
   )
   const [maxFileSize, setMaxFileSize] = useState(50)
   const [registrationKey, setRegistrationKey] = useState('')
+  const [registering, setRegistering] = useState(false)
+  const [unregistering, setUnregistering] = useState(false)
   const [connectionTest, setConnectionTest] = useState<ConnectionTestState>('idle')
   const paperSize = useSettings((s) => s.paperSize)
   const setPaperSize = useSettings((s) => s.setPaperSize)
@@ -617,9 +630,30 @@ export default function SettingsD(): React.JSX.Element {
   }
 
   async function handleRegister(): Promise<void> {
-    if (registrationKey.length < 12) return
-    const result = await cloudRegister(registrationKey)
-    if (!result.success) console.error('Registration failed:', result.error)
+    if (registrationKey.length < 12 || registering) return
+    setRegistering(true)
+    try {
+      const result = await cloudRegister(registrationKey)
+      if (result.success) {
+        useSettings.getState().setCloudRegistered(true)
+      } else {
+        console.error('Registration failed:', result.error)
+      }
+    } finally {
+      setRegistering(false)
+    }
+  }
+
+  async function handleUnregister(): Promise<void> {
+    if (unregistering) return
+    setUnregistering(true)
+    try {
+      await cloudUnregister()
+      useSettings.getState().setCloudRegistered(false)
+      setRegistrationKey('')
+    } finally {
+      setUnregistering(false)
+    }
   }
 
   function handleSave(): void {
@@ -633,9 +667,13 @@ export default function SettingsD(): React.JSX.Element {
       const cloudState = useCloud.getState()
       if (cloudState.polling) await cloudState.stop()
 
-      if (mode === 'local' && localDirectory) {
+      // Always start local watcher if folder configured — handles printing in both modes
+      if (localDirectory) {
         await useWatcher.getState().start(localDirectory)
-      } else if (mode === 'cloud' && cloudState.registered) {
+      }
+      // Additionally start cloud polling if in cloud mode
+      if (mode === 'cloud' && cloudState.registered) {
+        await window.api.cloud.setApprovedOnly(useSettings.getState().approvedOnly)
         await useCloud.getState().start()
       }
 
@@ -846,114 +884,147 @@ export default function SettingsD(): React.JSX.Element {
                 </button>
               </div>
 
-              {/* Local mode config */}
-              {mode === 'local' && (
-                <div className="relative mt-5 p-6 space-y-5" style={metalPanelStyle(c)}>
-                  <PanelRivets colors={c} />
-                  <div className="relative">
-                    <FieldLabel htmlFor="watch-dir-d" colors={c}>WATCH DIRECTORY</FieldLabel>
-                    <div className="flex gap-2">
-                      <div className="flex flex-1 items-center rounded px-3" style={insetPanelStyle(c)}>
-                        <FolderOpen className="mr-2 h-3.5 w-3.5 shrink-0" style={{ color: c.textMuted }} />
-                        <input
-                          id="watch-dir-d"
-                          type="text"
-                          value={localDirectory}
-                          onChange={(e) => setLocalDirectory(e.target.value)}
-                          className="h-9 w-full bg-transparent text-xs outline-none"
-                          style={{ ...monoFont, color: c.textPrimary }}
-                          placeholder="/path/to/photos"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const result = await window.api.openDirectory()
-                          if (!result.canceled && result.path) setLocalDirectory(result.path)
-                        }}
-                        className="shrink-0 rounded px-4 text-xs font-bold uppercase tracking-wider transition"
-                        style={{ ...metalPanelStyle(c), color: c.textPrimary }}
-                      >
-                        BROWSE
-                      </button>
+              {/* Photos folder — shown in both modes. In local mode this is the watch folder;
+                  in cloud mode it's the output folder where printed photos are stored. */}
+              <div className="relative mt-5 p-6 space-y-5" style={metalPanelStyle(c)}>
+                <PanelRivets colors={c} />
+                <div className="relative">
+                  <FieldLabel htmlFor="watch-dir-d" colors={c}>
+                    {mode === 'local' ? 'WATCH DIRECTORY' : 'OUTPUT FOLDER'}
+                  </FieldLabel>
+                  <div className="flex gap-2">
+                    <div className="flex flex-1 items-center rounded px-3" style={insetPanelStyle(c)}>
+                      <FolderOpen className="mr-2 h-3.5 w-3.5 shrink-0" style={{ color: c.textMuted }} />
+                      <input
+                        id="watch-dir-d"
+                        type="text"
+                        value={localDirectory}
+                        onChange={(e) => setLocalDirectory(e.target.value)}
+                        className="h-9 w-full bg-transparent text-xs outline-none"
+                        style={{ ...monoFont, color: c.textPrimary }}
+                        placeholder="/path/to/photos"
+                      />
                     </div>
-                    <FieldHint colors={c}>New images in this folder are automatically queued for printing.</FieldHint>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const result = await window.api.openDirectory()
+                        if (!result.canceled && result.path) setLocalDirectory(result.path)
+                      }}
+                      className="shrink-0 rounded px-4 text-xs font-bold uppercase tracking-wider transition"
+                      style={{ ...metalPanelStyle(c), color: c.textPrimary }}
+                    >
+                      BROWSE
+                    </button>
                   </div>
-                  <div className="relative">
-                    <FieldLabel colors={c}>FILE FORMATS</FieldLabel>
-                    <div className="flex flex-wrap gap-2">
-                      {FILE_FORMATS.map((f) => {
-                        const active = enabledFormats.has(f.ext)
-                        return (
-                          <button
-                            key={f.ext}
-                            type="button"
-                            onClick={() => toggleFormat(f.ext)}
-                            className="rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-200"
-                            style={
-                              active
-                                ? {
-                                    background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
-                                    color: '#ffffff',
-                                    boxShadow: `0 2px 4px ${c.shadowColor}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
-                                    ...monoFont,
-                                  }
-                                : {
-                                    ...insetPanelStyle(c),
-                                    ...monoFont,
-                                    color: c.textMuted,
-                                  }
-                            }
-                          >
-                            .{f.ext.toLowerCase()}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <FieldLabel htmlFor="max-file-d" colors={c}>MAX FILE SIZE</FieldLabel>
-                    <MetalStepper id="max-file-d" value={maxFileSize} onChange={setMaxFileSize} min={1} max={200} unit="MB" colors={c} />
-                    <FieldHint colors={c}>Files exceeding this size will be skipped.</FieldHint>
-                  </div>
+                  <FieldHint colors={c}>
+                    {mode === 'local'
+                      ? 'New images in this folder are automatically queued for printing.'
+                      : 'Printed photos are saved to a "Printed Photos" subfolder here.'}
+                  </FieldHint>
                 </div>
-              )}
+
+                {/* Local mode only: file formats + max size */}
+                {mode === 'local' && (
+                  <>
+                    <div className="relative">
+                      <FieldLabel colors={c}>FILE FORMATS</FieldLabel>
+                      <div className="flex flex-wrap gap-2">
+                        {FILE_FORMATS.map((f) => {
+                          const active = enabledFormats.has(f.ext)
+                          return (
+                            <button
+                              key={f.ext}
+                              type="button"
+                              onClick={() => toggleFormat(f.ext)}
+                              className="rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-200"
+                              style={
+                                active
+                                  ? {
+                                      background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
+                                      color: '#ffffff',
+                                      boxShadow: `0 2px 4px ${c.shadowColor}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
+                                      ...monoFont,
+                                    }
+                                  : {
+                                      ...insetPanelStyle(c),
+                                      ...monoFont,
+                                      color: c.textMuted,
+                                    }
+                              }
+                            >
+                              .{f.ext.toLowerCase()}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <FieldLabel htmlFor="max-file-d" colors={c}>MAX FILE SIZE</FieldLabel>
+                      <MetalStepper id="max-file-d" value={maxFileSize} onChange={setMaxFileSize} min={1} max={200} unit="MB" colors={c} />
+                      <FieldHint colors={c}>Files exceeding this size will be skipped.</FieldHint>
+                    </div>
+                  </>
+                )}
+              </div>
 
               {/* Cloud mode config */}
               {mode === 'cloud' && (
                 <div className="relative mt-5 p-6 space-y-5" style={metalPanelStyle(c)}>
                   <PanelRivets colors={c} />
                   <div className="relative">
-                    <div className="flex items-center justify-between">
-                      <FieldLabel colors={c}>REGISTRATION KEY</FieldLabel>
-                      <div className="flex items-center gap-3">
-                        {cloudRegistered && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: c.ledGreen }}>
-                            <CheckCircle2 className="h-3 w-3" /> REGISTERED
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-end gap-3">
-                      <RegistrationKeyInput value={registrationKey} onChange={setRegistrationKey} colors={c} />
-                      {!cloudRegistered && (
-                        <button
-                          type="button"
-                          onClick={handleRegister}
-                          disabled={registrationKey.length < 12}
-                          className="rounded px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition"
-                          style={{
-                            ...metalPanelStyle(c),
-                            color: registrationKey.length < 12 ? c.textMuted : c.textPrimary,
-                            opacity: registrationKey.length < 12 ? 0.5 : 1,
-                          }}
-                        >
-                          REGISTER
-                        </button>
-                      )}
-                    </div>
-                    <FieldHint colors={c}>12-digit code from your administrator. Format: 000-000-000-000.</FieldHint>
+                    <FieldLabel colors={c}>REGISTRATION KEY</FieldLabel>
+                    {!cloudRegistered ? (
+                      <>
+                        <div className="flex items-end gap-3">
+                          <RegistrationKeyInput value={registrationKey} onChange={setRegistrationKey} colors={c} />
+                          <button
+                            type="button"
+                            onClick={handleRegister}
+                            disabled={registrationKey.length < 12 || registering}
+                            className="rounded px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition"
+                            style={{
+                              ...metalPanelStyle(c),
+                              color: registrationKey.length < 12 || registering ? c.textMuted : c.textPrimary,
+                              opacity: registrationKey.length < 12 || registering ? 0.5 : 1,
+                            }}
+                          >
+                            {registering ? 'REGISTERING...' : 'REGISTER'}
+                          </button>
+                        </div>
+                        <FieldHint colors={c}>12-digit code from your administrator. Format: 000-000-000-000.</FieldHint>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex flex-1 items-center gap-2 rounded px-3 py-2.5"
+                            style={insetPanelStyle(c)}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: c.ledGreen }} />
+                            <span className="text-[11px] select-all" style={{ ...monoFont, color: c.textPrimary }}>
+                              {licenseKey}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleUnregister}
+                            disabled={unregistering}
+                            className="rounded px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition"
+                            style={{
+                              ...metalPanelStyle(c),
+                              color: unregistering ? c.textMuted : c.ledRed,
+                              opacity: unregistering ? 0.5 : 1,
+                            }}
+                          >
+                            {unregistering ? 'UNREGISTERING...' : 'UNREGISTER'}
+                          </button>
+                        </div>
+                        <FieldHint colors={c}>Provide this key when contacting support.</FieldHint>
+                      </>
+                    )}
                   </div>
+
                   <div className="flex items-center gap-4 relative">
                     <button
                       type="button"
@@ -992,6 +1063,75 @@ export default function SettingsD(): React.JSX.Element {
                         <AlertTriangle className="h-3 w-3" /> UNREACHABLE
                       </span>
                     )}
+                  </div>
+
+                  {/* Active event display */}
+                  <div className="relative">
+                    <FieldLabel colors={c}>ACTIVE EVENT</FieldLabel>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="flex flex-1 items-center gap-2 rounded px-3 py-2"
+                        style={insetPanelStyle(c)}
+                      >
+                        <Calendar className="h-3.5 w-3.5 shrink-0" style={{ color: selectedEventId !== null ? c.accent : c.textMuted }} />
+                        <span
+                          className="truncate text-[11px]"
+                          style={{ ...monoFont, color: selectedEventId !== null ? c.textPrimary : c.textMuted }}
+                        >
+                          {selectedEventName || (selectedEventId !== null ? `Event #${selectedEventId}` : '—')}
+                        </span>
+                      </div>
+                      {selectedEventId !== null && (
+                        <button
+                          type="button"
+                          onClick={clearEventSelection}
+                          className="inline-flex items-center gap-1.5 rounded px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition"
+                          style={{ ...metalPanelStyle(c), color: c.textMuted }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = c.textPrimary }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = c.textMuted }}
+                        >
+                          <XCircle className="h-3 w-3" />
+                          CHANGE
+                        </button>
+                      )}
+                    </div>
+                    <FieldHint colors={c}>Selected each session. Clearing this will reopen the event selector.</FieldHint>
+                  </div>
+
+                  {/* Approved images only toggle */}
+                  <div className="relative">
+                    <FieldLabel colors={c}>IMAGE FILTER</FieldLabel>
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={approvedOnly}
+                      onClick={() => setApprovedOnly(!approvedOnly)}
+                      className="flex items-center gap-3 rounded px-3 py-2.5 text-left transition"
+                      style={{
+                        ...metalPanelStyle(c),
+                        width: '100%',
+                      }}
+                    >
+                      {/* Checkbox indicator */}
+                      <span
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded"
+                        style={{
+                          backgroundColor: approvedOnly ? c.accent : c.baseDark,
+                          border: `1px solid ${approvedOnly ? c.accent : c.borderColor}`,
+                          boxShadow: `inset 0 1px 2px ${c.shadowColor}0.3)`,
+                        }}
+                      >
+                        {approvedOnly && <Check className="h-2.5 w-2.5" style={{ color: c.baseDark }} />}
+                      </span>
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: c.textPrimary }}>
+                          APPROVED IMAGES ONLY
+                        </span>
+                        <p className="text-[10px] mt-0.5" style={{ color: c.textMuted }}>
+                          Only download images that have been approved
+                        </p>
+                      </div>
+                    </button>
                   </div>
                 </div>
               )}

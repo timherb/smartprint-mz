@@ -48,6 +48,17 @@ interface CloudAPI {
   onPhotoReady: (callback: (payload: CloudPhotoReadyPayload) => void) => () => void
   onError: (callback: (payload: CloudErrorPayload) => void) => () => void
   onConnectionStatus: (callback: (payload: CloudConnectionStatusPayload) => void) => () => void
+  bulkResolve: (action: 'download' | 'skip') => Promise<{ success: boolean }>
+  onBulkWarning: (callback: (payload: { count: number }) => void) => () => void
+  onDownloadProgress: (
+    callback: (payload: {
+      status: 'idle' | 'downloading' | 'complete' | 'error'
+      current: number
+      total: number
+      filename: string | null
+      lastPollTime: number | null
+    }) => void
+  ) => () => void
 }
 
 // ---------------------------------------------------------------------------

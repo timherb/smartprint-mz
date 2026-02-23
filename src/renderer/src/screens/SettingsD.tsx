@@ -333,10 +333,12 @@ function MetalStepper({
 function RegistrationKeyInput({
   value,
   onChange,
+  onSubmit,
   colors,
 }: {
   value: string
   onChange: (v: string) => void
+  onSubmit: () => void
   colors: PressThemeColors
 }): React.JSX.Element {
   const segments = [value.slice(0, 3), value.slice(3, 6), value.slice(6, 9), value.slice(9, 12)]
@@ -355,11 +357,28 @@ function RegistrationKeyInput({
 
   const handleKeyDown = useCallback(
     (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        if (value.length === 12) onSubmit()
+        return
+      }
       if (e.key === 'Backspace' && segments[index].length === 0 && index > 0) {
         refs[index - 1].current?.focus()
       }
     },
-    [segments, refs],
+    [segments, refs, value, onSubmit],
+  )
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLInputElement>) => {
+      e.preventDefault()
+      const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 12)
+      if (!digits) return
+      onChange(digits)
+      // Focus the segment that would receive the next character
+      const nextSegIndex = Math.min(Math.floor(digits.length / 3), 3)
+      refs[nextSegIndex]?.current?.focus()
+    },
+    [onChange, refs],
   )
 
   return (
@@ -374,6 +393,7 @@ function RegistrationKeyInput({
             value={seg}
             onChange={(e) => handleSegmentChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
+            onPaste={handlePaste}
             maxLength={3}
             placeholder="000"
             className="h-10 w-14 rounded text-center text-xs tracking-[0.2em] outline-none transition-all duration-200"
@@ -977,7 +997,7 @@ export default function SettingsD(): React.JSX.Element {
                     {!cloudRegistered ? (
                       <>
                         <div className="flex items-end gap-3">
-                          <RegistrationKeyInput value={registrationKey} onChange={setRegistrationKey} colors={c} />
+                          <RegistrationKeyInput value={registrationKey} onChange={setRegistrationKey} onSubmit={handleRegister} colors={c} />
                           <button
                             type="button"
                             onClick={handleRegister}

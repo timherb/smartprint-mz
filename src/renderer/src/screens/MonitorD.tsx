@@ -23,6 +23,7 @@ import {
   Ban,
   Printer,
   Wifi,
+  Download,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -626,6 +627,172 @@ function LastPrintPreview({ photo, colors }: { photo: Photo; colors: PressThemeC
 }
 
 // ---------------------------------------------------------------------------
+// Cloud download status panel
+// ---------------------------------------------------------------------------
+
+interface DownloadProgressState {
+  status: 'idle' | 'downloading' | 'complete' | 'error'
+  current: number
+  total: number
+  filename: string | null
+  lastPollTime: number | null
+}
+
+function DownloadStatusPanel({
+  progress,
+  colors,
+}: {
+  progress: DownloadProgressState | null
+  colors: PressThemeColors
+}): React.JSX.Element {
+  const status = progress?.status ?? 'idle'
+  const current = progress?.current ?? 0
+  const total = progress?.total ?? 0
+  const filename = progress?.filename ?? null
+  const lastPollTime = progress?.lastPollTime ?? null
+
+  const ledColor =
+    status === 'downloading'
+      ? colors.accent
+      : status === 'complete'
+        ? colors.ledGreen
+        : status === 'error'
+          ? colors.ledRed
+          : colors.textMuted
+
+  const statusLabel =
+    status === 'downloading'
+      ? 'DOWNLOADING'
+      : status === 'complete'
+        ? 'COMPLETE'
+        : status === 'error'
+          ? 'ERROR'
+          : 'IDLE'
+
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h3
+          className="text-[11px] font-bold uppercase tracking-[0.12em]"
+          style={{ ...headerFont, color: colors.textPrimary }}
+        >
+          CLOUD DOWNLOAD
+        </h3>
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: ledColor }}
+        >
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="relative p-3 space-y-3" style={metalPanelStyle(colors)}>
+        <PanelRivets colors={colors} />
+
+        {/* LED + progress bar row */}
+        <div className="flex items-center gap-3 px-1">
+          {/* LED */}
+          <div className="relative shrink-0">
+            {status === 'downloading' && (
+              <span
+                className="absolute inset-0 rounded-full blur-[4px] opacity-60 animate-pulse"
+                style={{ backgroundColor: ledColor }}
+                aria-hidden
+              />
+            )}
+            <span
+              className="relative block h-3 w-3 rounded-full"
+              style={{
+                background: `linear-gradient(to bottom, ${ledColor}cc, ${ledColor})`,
+                boxShadow:
+                  status !== 'idle'
+                    ? `inset 0 -1px 2px ${colors.shadowColor}0.3), 0 0 4px ${ledColor}50`
+                    : `inset 0 -1px 2px ${colors.shadowColor}0.3)`,
+              }}
+            />
+          </div>
+
+          {/* Count */}
+          <div className="flex-1 min-w-0">
+            {status === 'downloading' || status === 'complete' ? (
+              <div className="flex items-baseline gap-1">
+                <span
+                  className="text-sm font-bold tabular-nums"
+                  style={{ ...monoFont, color: ledColor }}
+                >
+                  {current}
+                </span>
+                <span className="text-[10px]" style={{ color: colors.textMuted }}>
+                  / {total} files
+                </span>
+                {status === 'downloading' && total > 0 && (
+                  <span
+                    className="ml-auto text-[10px] font-bold tabular-nums"
+                    style={{ ...monoFont, color: colors.accent }}
+                  >
+                    {pct}%
+                  </span>
+                )}
+              </div>
+            ) : status === 'error' ? (
+              <span className="text-xs font-medium" style={{ color: colors.ledRed }}>
+                Download failed
+              </span>
+            ) : (
+              <span className="text-[10px] uppercase tracking-wider" style={{ color: colors.textMuted }}>
+                No pending files
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        {(status === 'downloading' || status === 'complete') && total > 0 && (
+          <div
+            className="h-1.5 w-full rounded-full overflow-hidden"
+            style={{ backgroundColor: colors.baseDark }}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-500 ease-out"
+              style={{
+                width: `${pct}%`,
+                background: `linear-gradient(to right, ${colors.accentDark}, ${colors.accent})`,
+                boxShadow: status === 'downloading' ? `0 0 6px ${colors.accentGlow}0.4)` : undefined,
+              }}
+            />
+          </div>
+        )}
+
+        {/* Current filename */}
+        {filename && status === 'downloading' && (
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded"
+            style={insetPanelStyle(colors)}
+          >
+            <Download className="h-3 w-3 shrink-0" style={{ color: colors.accent }} />
+            <span
+              className="text-[10px] truncate"
+              style={{ ...monoFont, color: colors.textMuted }}
+            >
+              {filename}
+            </span>
+          </div>
+        )}
+
+        {/* Last poll time */}
+        {lastPollTime && (
+          <p className="text-[9px] text-right" style={{ color: colors.textMuted }}>
+            Last poll: {new Date(lastPollTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -649,6 +816,7 @@ export default function MonitorD({ navigateTo }: { navigateTo?: (page: 'settings
   const lastPhoto = photos.length > 0 ? photos[0] : null
   const mode = useSettings((s) => s.mode)
   const cloudConnected = useCloud((s) => s.connected)
+  const downloadProgress = useCloud((s) => s.downloadProgress)
   const watcherRunning = useWatcher((s) => s.running)
   const isConnected = mode === 'cloud' ? cloudConnected : watcherRunning
 
@@ -1020,6 +1188,11 @@ export default function MonitorD({ navigateTo }: { navigateTo?: (page: 'settings
                   )}
                 </div>
               </section>
+
+              {/* Cloud Download Status (cloud mode only) */}
+              {mode === 'cloud' && (
+                <DownloadStatusPanel progress={downloadProgress} colors={c} />
+              )}
 
               {/* Activity Feed - Print Log on paper */}
               <section>

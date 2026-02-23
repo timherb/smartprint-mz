@@ -146,6 +146,20 @@ function setupCloudWatcherEvents(): void {
       win.webContents.send('cloud:connection-status', { connected })
     }
   })
+
+  cloudWatcher.on('bulk-warning', (count) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('cloud:bulk-warning', { count })
+    }
+  })
+
+  cloudWatcher.on('download-progress', (progress) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('cloud:download-progress', progress)
+    }
+  })
 }
 
 setupCloudWatcherEvents()
@@ -419,6 +433,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle('cloud:status', () => {
     return cloudWatcher.getStatus()
+  })
+
+  ipcMain.handle('cloud:bulk-resolve', (_event, action: 'download' | 'skip') => {
+    cloudWatcher.resolveBulkWarning(action)
+    return { success: true }
   })
 
   // -------------------------------------------------------------------------

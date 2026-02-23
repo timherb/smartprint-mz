@@ -8,6 +8,7 @@ import axios, {
   InternalAxiosRequestConfig,
   AxiosResponse
 } from 'axios'
+import https from 'https'
 import ElectronStoreModule from 'electron-store'
 // Handle ESM/CJS interop - electron-store v11 is ESM-only
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,16 +50,27 @@ interface CloudStoreSchema extends Record<string, unknown> {
   cloudLicenseKey: string
 }
 
+const CANONICAL_API_URL = 'https://smartprint.smartactivator-api.net'
+
 const store = new ElectronStore<CloudStoreSchema>({
   name: 'cloud-config',
   defaults: {
     cloudAuthToken: '',
-    cloudApiBaseUrl: 'https://smartprint.smartactivator-api.net',
+    cloudApiBaseUrl: CANONICAL_API_URL,
     cloudPollIntervalMs: 15000,
     cloudHealthIntervalMs: 60000,
     cloudLicenseKey: ''
   }
 })
+
+// Migrate stale base URL from any previous dev/test configuration
+{
+  const storedUrl = store.get('cloudApiBaseUrl')
+  if (storedUrl && !storedUrl.includes('smartactivator-api.net')) {
+    logger.warn(`Resetting stale cloudApiBaseUrl "${storedUrl}" → "${CANONICAL_API_URL}"`)
+    store.set('cloudApiBaseUrl', CANONICAL_API_URL)
+  }
+}
 
 // ─── Retry Configuration ──────────────────────────────────────────────────────
 
@@ -132,22 +144,41 @@ export function getHealthInterval(): number {
   return store.get('cloudHealthIntervalMs')
 }
 
+// ─── HTTPS Agent with explicit SNI ────────────────────────────────────────────
+//
+// Electron's BoringSSL (used by Node.js HTTP client in some Electron builds)
+// does not always negotiate SNI correctly when the URL is assembled from parts.
+// An explicit httpsAgent with `servername` set forces the correct SNI regardless.
+
+function makeHttpsAgent(url: string): https.Agent {
+  try {
+    const { hostname } = new URL(url)
+    return new https.Agent({ servername: hostname })
+  } catch {
+    return new https.Agent()
+  }
+}
+
 // ─── Create Axios Instance ────────────────────────────────────────────────────
 
 function createApiClient(): AxiosInstance {
+  const baseUrl = getBaseUrl()
   const instance = axios.create({
-    baseURL: getBaseUrl(),
+    baseURL: baseUrl,
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json'
-    }
+    },
+    httpsAgent: makeHttpsAgent(baseUrl)
   })
 
   // Request interceptor: attach auth token
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      // Update baseURL in case it changed in store
-      config.baseURL = getBaseUrl()
+      // Update baseURL (and SNI agent) in case it changed in store since startup
+      const currentBase = getBaseUrl()
+      config.baseURL = currentBase
+      config.httpsAgent = makeHttpsAgent(currentBase)
 
       const token = getAuthToken()
       if (token) {
@@ -249,11 +280,13 @@ function toApiClientError(err: Error): ApiClientError {
 // ─── Network Connectivity Check ───────────────────────────────────────────────
 
 export async function checkNetworkConnectivity(): Promise<boolean> {
+  const baseUrl = getBaseUrl()
   try {
-    await axios.get(getBaseUrl(), {
+    await axios.get(baseUrl, {
       timeout: 5000,
       // Any HTTP response (even 4xx/5xx) means the server is reachable
-      validateStatus: () => true
+      validateStatus: () => true,
+      httpsAgent: makeHttpsAgent(baseUrl)
     })
     return true
   } catch {
@@ -278,11 +311,16 @@ export async function activateDevice(
     name: `SmartPrint-${deviceCode.slice(0, 8)}`,
     platform: process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux'
   }
+  const baseUrl = getBaseUrl()
+  const activateUrl = baseUrl + ENDPOINTS.ACTIVATE
+  logger.info(`Activating device at: ${activateUrl}`)
   // Activate endpoint has no auth requirement — post without Bearer token
+  // Explicit httpsAgent ensures correct TLS SNI (required for Electron/BoringSSL)
   const response = await withRetry(() =>
-    axios.post<ActivateResponse>(getBaseUrl() + ENDPOINTS.ACTIVATE, payload, {
+    axios.post<ActivateResponse>(activateUrl, payload, {
       headers: { 'Content-Type': 'application/json' },
-      timeout: 30000
+      timeout: 30000,
+      httpsAgent: makeHttpsAgent(baseUrl)
     })
   )
   return response.data

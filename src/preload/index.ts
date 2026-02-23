@@ -194,6 +194,45 @@ const api = {
       }
       ipcRenderer.on('cloud:connection-status', handler)
       return () => ipcRenderer.removeListener('cloud:connection-status', handler)
+    },
+
+    bulkResolve: (action: 'download' | 'skip'): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('cloud:bulk-resolve', action),
+
+    onBulkWarning: (callback: EventCallback<{ count: number }>): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { count: number }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('cloud:bulk-warning', handler)
+      return () => ipcRenderer.removeListener('cloud:bulk-warning', handler)
+    },
+
+    onDownloadProgress: (
+      callback: EventCallback<{
+        status: 'idle' | 'downloading' | 'complete' | 'error'
+        current: number
+        total: number
+        filename: string | null
+        lastPollTime: number | null
+      }>
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: {
+          status: 'idle' | 'downloading' | 'complete' | 'error'
+          current: number
+          total: number
+          filename: string | null
+          lastPollTime: number | null
+        }
+      ): void => {
+        callback(payload)
+      }
+      ipcRenderer.on('cloud:download-progress', handler)
+      return () => ipcRenderer.removeListener('cloud:download-progress', handler)
     }
   },
 

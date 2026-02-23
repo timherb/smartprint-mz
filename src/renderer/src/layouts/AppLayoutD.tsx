@@ -27,6 +27,7 @@ import GalleryD from '@/screens/GalleryD'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ToastContainer } from '@/components/ToastContainer'
 import { EventSelectorModal } from '@/components/EventSelectorModal'
+import { BulkDownloadWarningModal } from '@/components/BulkDownloadWarningModal'
 
 type Page = 'settings' | 'monitor' | 'gallery'
 
@@ -563,6 +564,7 @@ export default function AppLayoutD(): React.JSX.Element {
 
       {/* ---- Cloud event selector (persistent modal, blocks cloud mode until event chosen) ---- */}
       <EventSelectorModal />
+      <BulkDownloadWarningModal />
     </div>
   )
 }

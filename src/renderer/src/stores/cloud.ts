@@ -21,6 +21,18 @@ interface CloudState {
   selectedEventName: string
   licenseKey: string
 
+  // Bulk download warning
+  bulkWarningCount: number | null
+
+  // Download progress for current/last poll
+  downloadProgress: {
+    status: 'idle' | 'downloading' | 'complete' | 'error'
+    current: number
+    total: number
+    filename: string | null
+    lastPollTime: number | null
+  } | null
+
   // Actions
   register: (key: string) => Promise<{ success: boolean; error?: string }>
   unregister: () => Promise<void>
@@ -31,6 +43,7 @@ interface CloudState {
   stop: () => Promise<void>
   checkHealth: () => Promise<void>
   refreshStatus: () => Promise<void>
+  resolveBulk: (action: 'download' | 'skip') => Promise<void>
 
   // Event subscriber
   subscribe: () => () => void
@@ -48,6 +61,8 @@ export const useCloud = create<CloudState>((set, get) => ({
   selectedEventId: null,
   selectedEventName: '',
   licenseKey: '',
+  bulkWarningCount: null,
+  downloadProgress: null,
 
   register: async (key) => {
     try {
@@ -149,6 +164,15 @@ export const useCloud = create<CloudState>((set, get) => ({
     }
   },
 
+  resolveBulk: async (action) => {
+    try {
+      await window.api.cloud.bulkResolve(action)
+      set({ bulkWarningCount: null })
+    } catch (err) {
+      console.error('Failed to resolve bulk warning:', err)
+    }
+  },
+
   subscribe: () => {
     if (_cloudSubscribed) return () => {}
     _cloudSubscribed = true
@@ -164,6 +188,14 @@ export const useCloud = create<CloudState>((set, get) => ({
       set({ connected: payload.connected })
     })
 
+    const unsubBulkWarning = window.api.cloud.onBulkWarning((payload) => {
+      set({ bulkWarningCount: payload.count })
+    })
+
+    const unsubDownloadProgress = window.api.cloud.onDownloadProgress((payload) => {
+      set({ downloadProgress: payload })
+    })
+
     // Sync initial status
     get().refreshStatus()
 
@@ -171,6 +203,8 @@ export const useCloud = create<CloudState>((set, get) => ({
       _cloudSubscribed = false
       unsubError()
       unsubConnectionStatus()
+      unsubBulkWarning()
+      unsubDownloadProgress()
     }
   }
 }))

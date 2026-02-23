@@ -44,10 +44,20 @@ const logger = createLogger({
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface DownloadProgress {
+  status: 'idle' | 'downloading' | 'complete' | 'error'
+  current: number
+  total: number
+  filename: string | null
+  lastPollTime: number | null
+}
+
 export interface CloudWatcherEvents {
   'photo-ready': (filePath: string, filename: string) => void
   'cloud-error': (error: Error) => void
   'connection-status': (connected: boolean) => void
+  'bulk-warning': (count: number) => void
+  'download-progress': (progress: DownloadProgress) => void
 }
 
 export interface CloudWatcherStatus {
@@ -85,6 +95,7 @@ export class CloudWatcher extends EventEmitter {
   private approvedOnly: boolean = false
   private deviceId: string = ''
   private pollGeneration: number = 0
+  private bulkWarningResolver: ((action: 'download' | 'skip') => void) | null = null
 
   constructor() {
     super()
@@ -206,6 +217,17 @@ export class CloudWatcher extends EventEmitter {
     this.selectedEventId = id
     const event = this.events.find((e) => e.id === id)
     logger.info(`Event selected: ${event?.name ?? id} (id=${id})`)
+  }
+
+  /**
+   * Resolve a pending bulk-download warning prompt.
+   * Called by the main process after the user confirms or cancels.
+   */
+  resolveBulkWarning(action: 'download' | 'skip'): void {
+    if (this.bulkWarningResolver) {
+      this.bulkWarningResolver(action)
+      this.bulkWarningResolver = null
+    }
   }
 
   /**
@@ -359,11 +381,49 @@ export class CloudWatcher extends EventEmitter {
 
       if (images.length === 0) {
         logger.info('No new images available')
+        this.emit('download-progress', {
+          status: 'idle',
+          current: 0,
+          total: 0,
+          filename: null,
+          lastPollTime: this.lastPollTime,
+        })
         this.isPolling = false
         return
       }
 
       logger.info(`Found ${images.length} image(s) to download`)
+
+      this.emit('download-progress', {
+        status: 'downloading',
+        current: 0,
+        total: images.length,
+        filename: null,
+        lastPollTime: this.lastPollTime,
+      })
+
+      // If batch is large, pause and wait for user confirmation before downloading
+      if (images.length > 49) {
+        logger.warn(`Large batch detected: ${images.length} images — waiting for user confirmation`)
+        this.emit('bulk-warning', images.length)
+
+        const action = await new Promise<'download' | 'skip'>((resolve) => {
+          this.bulkWarningResolver = resolve
+        })
+
+        if (this.pollGeneration !== generation) {
+          logger.info('Poll cancelled during bulk warning — aborting')
+          return
+        }
+
+        if (action === 'skip') {
+          logger.info(`User skipped download — marking all ${images.length} images as downloaded`)
+          await this.markDownloaded(images.map((img) => img.fileName))
+          return
+        }
+
+        logger.info(`User confirmed download of ${images.length} images — proceeding`)
+      }
 
       for (const image of images) {
         // Stop downloading if a restart/stop was triggered since this poll began
@@ -376,6 +436,14 @@ export class CloudWatcher extends EventEmitter {
         if (this.processedFiles.has(image.fileName)) {
           continue
         }
+
+        this.emit('download-progress', {
+          status: 'downloading',
+          current: this.processedFiles.size,
+          total: images.length,
+          filename: image.fileName,
+          lastPollTime: this.lastPollTime,
+        })
 
         try {
           await this.downloadAndVerify(image)
@@ -394,10 +462,26 @@ export class CloudWatcher extends EventEmitter {
           }
         }
       }
+
+      // Emit completion after all images are processed
+      this.emit('download-progress', {
+        status: 'complete',
+        current: this.processedFiles.size,
+        total: images.length,
+        filename: null,
+        lastPollTime: this.lastPollTime,
+      })
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))
       logger.error(`Poll failed: ${error.message}`)
       this.emit('cloud-error', error)
+      this.emit('download-progress', {
+        status: 'error',
+        current: 0,
+        total: 0,
+        filename: null,
+        lastPollTime: this.lastPollTime,
+      })
     } finally {
       this.isPolling = false
     }

@@ -18,6 +18,7 @@ publish:
   owner: timherb
   repo: smartprint-mz
   private: true
+  releaseType: release
 win:
   executableName: SmartPrint
   target:

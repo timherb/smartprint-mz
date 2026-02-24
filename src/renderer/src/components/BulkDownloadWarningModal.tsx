@@ -8,14 +8,14 @@
  */
 
 import { useState } from 'react'
-import { AlertTriangle, Download, CheckCheck } from 'lucide-react'
+import { AlertTriangle, Download, CheckCheck, FolderOpen } from 'lucide-react'
 import { usePressTheme } from '@/stores/pressTheme'
 import { useCloud } from '@/stores/cloud'
 
 export function BulkDownloadWarningModal(): React.JSX.Element | null {
   const c = usePressTheme()
   const { bulkWarningCount, resolveBulk } = useCloud()
-  const [resolving, setResolving] = useState<'download' | 'skip' | null>(null)
+  const [resolving, setResolving] = useState<'download' | 'skip' | 'gallery' | null>(null)
 
   if (bulkWarningCount === null) return null
 
@@ -23,7 +23,7 @@ export function BulkDownloadWarningModal(): React.JSX.Element | null {
   const buttonShadow = `0 2px 4px ${c.shadowColor}0.4), inset 0 1px 0 ${c.highlightColor}0.12)`
   const buttonShadowHover = `0 4px 8px ${c.shadowColor}0.5), inset 0 1px 0 ${c.highlightColor}0.16)`
 
-  const handleAction = async (action: 'download' | 'skip'): Promise<void> => {
+  const handleAction = async (action: 'download' | 'skip' | 'gallery'): Promise<void> => {
     setResolving(action)
     try {
       await resolveBulk(action)
@@ -136,6 +136,50 @@ export function BulkDownloadWarningModal(): React.JSX.Element | null {
                 </div>
                 <div className="mt-0.5 text-[10px]" style={{ color: c.textMuted }}>
                   Download and print all {bulkWarningCount} photos
+                </div>
+              </div>
+            </button>
+
+            {/* Download to Gallery */}
+            <button
+              onClick={() => handleAction('gallery')}
+              disabled={resolving !== null}
+              className="flex w-full items-center gap-3 rounded px-4 py-3 text-left transition-all"
+              style={{
+                backgroundColor: resolving === 'gallery' ? `${c.ledGreen}15` : c.baseDark,
+                border: `1px solid ${resolving === 'gallery' ? c.ledGreen : c.borderColor}`,
+                boxShadow: buttonShadow,
+                opacity: resolving !== null && resolving !== 'gallery' ? 0.4 : 1,
+                cursor: resolving !== null ? 'not-allowed' : 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                if (resolving === null) {
+                  e.currentTarget.style.borderColor = c.ledGreen
+                  e.currentTarget.style.boxShadow = `0 0 0 1px ${c.ledGreen}30, ${buttonShadowHover}`
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (resolving === null) {
+                  e.currentTarget.style.borderColor = c.borderColor
+                  e.currentTarget.style.boxShadow = buttonShadow
+                }
+              }}
+            >
+              <div
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded"
+                style={{ backgroundColor: `${c.ledGreen}15` }}
+              >
+                <FolderOpen className="h-3.5 w-3.5" style={{ color: c.ledGreen }} />
+              </div>
+              <div>
+                <div
+                  className="text-xs font-bold uppercase tracking-[0.06em]"
+                  style={{ color: c.textPrimary }}
+                >
+                  {resolving === 'gallery' ? 'Saving to Gallery…' : 'Download to Gallery'}
+                </div>
+                <div className="mt-0.5 text-[10px]" style={{ color: c.textMuted }}>
+                  Save all {bulkWarningCount} photos for manual printing — no auto-print
                 </div>
               </div>
             </button>

@@ -43,7 +43,7 @@ interface CloudState {
   stop: () => Promise<void>
   checkHealth: () => Promise<void>
   refreshStatus: () => Promise<void>
-  resolveBulk: (action: 'download' | 'skip') => Promise<void>
+  resolveBulk: (action: 'download' | 'skip' | 'gallery') => Promise<void>
 
   // Event subscriber
   subscribe: () => () => void
@@ -164,7 +164,7 @@ export const useCloud = create<CloudState>((set, get) => ({
     }
   },
 
-  resolveBulk: async (action) => {
+  resolveBulk: async (action: 'download' | 'skip' | 'gallery') => {
     try {
       await window.api.cloud.bulkResolve(action)
       set({ bulkWarningCount: null })

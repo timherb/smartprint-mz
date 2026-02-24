@@ -257,12 +257,20 @@ app.whenReady().then(() => {
     if (job.status === 'completed') {
       const today = new Date().toISOString().slice(0, 10)
       const storedDate = settingsStore.get('printCountDate', '') as string
+      let newCount: number
       if (storedDate === today) {
         const current = settingsStore.get('printCountToday', 0) as number
-        settingsStore.set('printCountToday', current + 1)
+        newCount = current + 1
+        settingsStore.set('printCountToday', newCount)
       } else {
+        newCount = 1
         settingsStore.set('printCountDate', today)
-        settingsStore.set('printCountToday', 1)
+        settingsStore.set('printCountToday', newCount)
+      }
+      // Notify renderer so display stays in sync without relying on persist writes
+      const win = getMainWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('app:print-count', { count: newCount, date: today })
       }
     }
   })
@@ -435,7 +443,7 @@ app.whenReady().then(() => {
     return cloudWatcher.getStatus()
   })
 
-  ipcMain.handle('cloud:bulk-resolve', (_event, action: 'download' | 'skip') => {
+  ipcMain.handle('cloud:bulk-resolve', (_event, action: 'download' | 'skip' | 'gallery') => {
     cloudWatcher.resolveBulkWarning(action)
     return { success: true }
   })

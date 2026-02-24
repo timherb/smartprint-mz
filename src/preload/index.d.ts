@@ -48,7 +48,7 @@ interface CloudAPI {
   onPhotoReady: (callback: (payload: CloudPhotoReadyPayload) => void) => () => void
   onError: (callback: (payload: CloudErrorPayload) => void) => () => void
   onConnectionStatus: (callback: (payload: CloudConnectionStatusPayload) => void) => () => void
-  bulkResolve: (action: 'download' | 'skip') => Promise<{ success: boolean }>
+  bulkResolve: (action: 'download' | 'skip' | 'gallery') => Promise<{ success: boolean }>
   onBulkWarning: (callback: (payload: { count: number }) => void) => () => void
   onDownloadProgress: (
     callback: (payload: {
@@ -221,6 +221,7 @@ interface PrinterAPI {
 interface SmartPrintAPI {
   setWindowTitle: (title: string) => void
   getDeviceId: () => Promise<string>
+  onPrintCount: (callback: (payload: { count: number; date: string }) => void) => () => void
   openDirectory: () => Promise<{ canceled: boolean; path: string }>
   readImageAsDataUrl: (filepath: string) => Promise<string | null>
   settings: {

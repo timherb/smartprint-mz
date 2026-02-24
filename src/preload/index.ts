@@ -103,6 +103,16 @@ const api = {
   // App: get hardware-based device ID
   getDeviceId: (): Promise<string> => ipcRenderer.invoke('app:get-device-id'),
 
+  // App: subscribe to print count updates from main process
+  onPrintCount: (callback: EventCallback<{ count: number; date: string }>): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: { count: number; date: string }
+    ): void => { callback(payload) }
+    ipcRenderer.on('app:print-count', handler)
+    return () => ipcRenderer.removeListener('app:print-count', handler)
+  },
+
   // Dialog
   openDirectory: (): Promise<{ canceled: boolean; path: string }> =>
     ipcRenderer.invoke('dialog:open-directory'),
@@ -196,7 +206,7 @@ const api = {
       return () => ipcRenderer.removeListener('cloud:connection-status', handler)
     },
 
-    bulkResolve: (action: 'download' | 'skip'): Promise<{ success: boolean }> =>
+    bulkResolve: (action: 'download' | 'skip' | 'gallery'): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('cloud:bulk-resolve', action),
 
     onBulkWarning: (callback: EventCallback<{ count: number }>): (() => void) => {

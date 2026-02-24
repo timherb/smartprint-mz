@@ -343,6 +343,11 @@ export default function AppLayoutD(): React.JSX.Element {
       useCloud.getState().checkHealth()
     }
 
+    // Keep print counter in sync — main process is the sole writer
+    const unsubPrintCount = window.api.onPrintCount(({ count, date }) => {
+      useSettings.setState({ printCountToday: count, printCountDate: date })
+    })
+
     // Toast on print failures
     const unsubFailures = usePrinter.subscribe((state) => {
       if (state.queueStats.failed > prevFailedRef.current) {
@@ -356,6 +361,7 @@ export default function AppLayoutD(): React.JSX.Element {
       unsubWatcher()
       unsubCloud()
       unsubFailures()
+      unsubPrintCount()
     }
   }, [])
 

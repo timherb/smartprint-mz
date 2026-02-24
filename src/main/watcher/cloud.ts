@@ -95,7 +95,7 @@ export class CloudWatcher extends EventEmitter {
   private approvedOnly: boolean = false
   private deviceId: string = ''
   private pollGeneration: number = 0
-  private bulkWarningResolver: ((action: 'download' | 'skip') => void) | null = null
+  private bulkWarningResolver: ((action: 'download' | 'skip' | 'gallery') => void) | null = null
 
   constructor() {
     super()
@@ -223,7 +223,7 @@ export class CloudWatcher extends EventEmitter {
    * Resolve a pending bulk-download warning prompt.
    * Called by the main process after the user confirms or cancels.
    */
-  resolveBulkWarning(action: 'download' | 'skip'): void {
+  resolveBulkWarning(action: 'download' | 'skip' | 'gallery'): void {
     if (this.bulkWarningResolver) {
       this.bulkWarningResolver(action)
       this.bulkWarningResolver = null
@@ -407,7 +407,7 @@ export class CloudWatcher extends EventEmitter {
         logger.warn(`Large batch detected: ${images.length} images — waiting for user confirmation`)
         this.emit('bulk-warning', images.length)
 
-        const action = await new Promise<'download' | 'skip'>((resolve) => {
+        const action = await new Promise<'download' | 'skip' | 'gallery'>((resolve) => {
           this.bulkWarningResolver = resolve
         })
 
@@ -419,6 +419,12 @@ export class CloudWatcher extends EventEmitter {
         if (action === 'skip') {
           logger.info(`User skipped download — marking all ${images.length} images as downloaded`)
           await this.markDownloaded(images.map((img) => img.fileName))
+          return
+        }
+
+        if (action === 'gallery') {
+          logger.info(`User chose gallery download — saving ${images.length} images to Printed Photos folder`)
+          await this.downloadBatchToGallery(images)
           return
         }
 
@@ -539,6 +545,66 @@ export class CloudWatcher extends EventEmitter {
         }
       }
     }
+  }
+
+  /**
+   * Download a batch of images directly to the "Printed Photos" gallery folder,
+   * bypassing the local watcher so they are NOT queued for printing.
+   * Used when the operator chooses "Download to Gallery" on the bulk warning modal.
+   */
+  private async downloadBatchToGallery(images: ImageEntry[]): Promise<void> {
+    const galleryDir = join(this.watchDirectory, 'Printed Photos')
+    try {
+      await mkdir(galleryDir, { recursive: true })
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      logger.error(`Failed to create gallery directory: ${error.message}`)
+      this.emit('cloud-error', error)
+      return
+    }
+
+    for (const image of images) {
+      this.emit('download-progress', {
+        status: 'downloading',
+        current: this.processedFiles.size,
+        total: images.length,
+        filename: image.fileName,
+        lastPollTime: this.lastPollTime,
+      })
+
+      try {
+        const filePath = join(galleryDir, image.fileName)
+        const buffer = await downloadFile(image.url)
+        await writeFile(filePath, buffer)
+
+        const fileStat = await stat(filePath)
+        if (fileStat.size !== image.bytes) {
+          throw new Error(
+            `Size mismatch for ${image.fileName}: expected ${image.bytes} bytes, got ${fileStat.size} bytes`
+          )
+        }
+
+        logger.info(`Gallery download verified: ${image.fileName} (${fileStat.size} bytes)`)
+        this.processedFiles.add(image.fileName)
+        await this.markDownloaded([image.fileName])
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err))
+        logger.error(`Gallery download failed for ${image.fileName}: ${error.message}`)
+        this.emit('cloud-error', error)
+        if (error instanceof ApiClientError && error.isNetworkError) {
+          logger.warn('Network error — aborting gallery download batch')
+          break
+        }
+      }
+    }
+
+    this.emit('download-progress', {
+      status: 'complete',
+      current: this.processedFiles.size,
+      total: images.length,
+      filename: null,
+      lastPollTime: this.lastPollTime,
+    })
   }
 
   private async performHealthCheck(): Promise<void> {

@@ -909,35 +909,49 @@ export default function MonitorD({ navigateTo }: { navigateTo?: (page: 'settings
   // No-printer-configured empty state
   if (pool.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center text-center" style={headerFont}>
-        <div
-          className="mb-5 flex h-20 w-20 items-center justify-center rounded-lg"
-          style={metalPanelStyle(c)}
-        >
-          <Printer className="h-10 w-10" style={{ color: c.textMuted }} />
+      <div className="flex h-full flex-col" style={headerFont}>
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-md px-6 py-12 flex flex-col items-center gap-8">
+            {/* No printer message */}
+            <div className="flex flex-col items-center text-center">
+              <div
+                className="mb-5 flex h-20 w-20 items-center justify-center rounded-lg"
+                style={metalPanelStyle(c)}
+              >
+                <Printer className="h-10 w-10" style={{ color: c.textMuted }} />
+              </div>
+              <p
+                className="text-sm font-bold uppercase tracking-[0.15em]"
+                style={{ color: c.textPrimary }}
+              >
+                NO PRINTER CONFIGURED
+              </p>
+              <p className="mt-2 max-w-sm text-xs leading-relaxed" style={{ color: c.textMuted }}>
+                Add a printer to the pool in Settings to start printing photos automatically.
+              </p>
+              {navigateTo && (
+                <button
+                  type="button"
+                  onClick={() => navigateTo('settings')}
+                  className="mt-6 inline-flex items-center gap-2 rounded px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-all duration-200 hover:brightness-110"
+                  style={{
+                    background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
+                    boxShadow: `0 2px 8px ${c.accentGlow}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
+                  }}
+                >
+                  GO TO SETTINGS
+                </button>
+              )}
+            </div>
+
+            {/* Cloud download panel (cloud mode only) */}
+            {mode === 'cloud' && (
+              <div className="w-full">
+                <DownloadStatusPanel progress={downloadProgress} colors={c} />
+              </div>
+            )}
+          </div>
         </div>
-        <p
-          className="text-sm font-bold uppercase tracking-[0.15em]"
-          style={{ color: c.textPrimary }}
-        >
-          NO PRINTER CONFIGURED
-        </p>
-        <p className="mt-2 max-w-sm text-xs leading-relaxed" style={{ color: c.textMuted }}>
-          Add a printer to the pool in Settings to start printing photos automatically.
-        </p>
-        {navigateTo && (
-          <button
-            type="button"
-            onClick={() => navigateTo('settings')}
-            className="mt-6 inline-flex items-center gap-2 rounded px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-all duration-200 hover:brightness-110"
-            style={{
-              background: `linear-gradient(to bottom, ${c.accent}, ${c.accentDark})`,
-              boxShadow: `0 2px 8px ${c.accentGlow}0.3), inset 0 1px 0 ${c.highlightColor}0.15)`,
-            }}
-          >
-            GO TO SETTINGS
-          </button>
-        )}
       </div>
     )
   }

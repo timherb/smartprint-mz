@@ -113,7 +113,15 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: 'smart-print-settings',
-      storage: electronStorage
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      storage: electronStorage as any,
+      // printCountToday/printCountDate are owned by the main process — exclude them
+      // from renderer persist writes to prevent stale values overwriting the real count
+      partialize: (state) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { printCountToday, printCountDate, incrementPrintCount, loadFromMain, ...rest } = state
+        return rest
+      }
     }
   )
 )

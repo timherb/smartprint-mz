@@ -1,31 +1,31 @@
-  trigger:                                                                                                                                                                                                         
-    - main                                                                                                                                                                                                         
-                                                                                                                                                                                                                   
-  pool:                                                                                                                                                                                                            
-    vmImage: 'windows-latest'
-                                                                                                                                                                                                                   
-  steps:                                                                                                                                                                                                           
-    - task: NodeTool@0                                                                                                                                                                                             
-      inputs:                                                                                                                                                                                                      
-        versionSpec: '20.x'
-      displayName: 'Install Node.js 20'
+trigger:
+  - main
 
-    - script: npm ci
-      displayName: 'Install dependencies'
+pool:
+  vmImage: 'windows-latest'
 
-    - script: npm run typecheck
-      displayName: 'TypeScript check'
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.x'
+    displayName: 'Install Node.js 20'
 
-    - script: npm run build
-      displayName: 'Build app'
+  - script: npm ci
+    displayName: 'Install dependencies'
 
-    - script: npx electron-builder --win --publish always
-      displayName: 'Package and publish to GitHub Releases'
-      env:
-        GH_TOKEN: $(GH_TOKEN)
+  - script: npm run typecheck
+    displayName: 'TypeScript check'
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-        pathToPublish: 'dist'
-        artifactName: 'SmartPrint-Windows'
-      displayName: 'Archive build artifacts'
+  - script: npm run build
+    displayName: 'Build app'
+
+  - script: npx electron-builder --win --publish always
+    displayName: 'Package and publish to GitHub Releases'
+    env:
+      GH_TOKEN: $(GH_TOKEN)
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathToPublish: 'dist'
+      artifactName: 'SmartPrint-Windows'
+    displayName: 'Archive build artifacts'

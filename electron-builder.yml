@@ -14,8 +14,10 @@ files:
 asarUnpack:
   - resources/**
 publish:
-  provider: generic
-  url: https://YOUR_STORAGE_ACCOUNT.blob.core.windows.net/releases/
+  provider: github
+  owner: timherb
+  repo: smartprint-mz
+  private: true
 win:
   executableName: SmartPrint
   target:

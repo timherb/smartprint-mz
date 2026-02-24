@@ -19,11 +19,13 @@
     - script: npm run build
       displayName: 'Build app'
 
-    - script: npx electron-builder --win --publish never
-      displayName: 'Package Windows portable .exe'
+    - script: npx electron-builder --win --publish always
+      displayName: 'Package and publish to GitHub Releases'
+      env:
+        GH_TOKEN: $(GH_TOKEN)
 
     - task: PublishBuildArtifacts@1
       inputs:
         pathToPublish: 'dist'
         artifactName: 'SmartPrint-Windows'
-      displayName: 'Publish artifact'
+      displayName: 'Archive build artifacts'
